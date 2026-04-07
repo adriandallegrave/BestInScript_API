@@ -3,11 +3,7 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Services ───────────────────────────────────────────────────────────────────
-
 builder.Services.AddControllers();
-
-// Swagger / OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -19,17 +15,12 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// App services (singletons so the same instance is shared)
 builder.Services.AddSingleton<ScriptRepository>();
 builder.Services.AddSingleton<InputSimulatorService>();
 builder.Services.AddSingleton<HotkeyEngine>();
-
-// Register HotkeyEngine as IHostedService so StartAsync/StopAsync are called
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
 
 var app = builder.Build();
-
-// ── Middleware ────────────────────────────────────────────────────────────────
 
 app.UseSwagger();
 app.UseSwaggerUI(c =>
@@ -38,9 +29,31 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// Serve index.html at root — no service registration needed for static files
-app.UseDefaultFiles();
-app.UseStaticFiles();
+// Serve index.html from wwwroot folder next to the project file.
+// AppContext.BaseDirectory points to bin\Debug\net10.0\ at runtime,
+// so we walk up to the project root (where wwwroot lives).
+app.MapGet("/", async (HttpContext ctx) =>
+{
+    // Try project root first (dotnet run), then beside the exe (published)
+    var candidates = new[]
+    {
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "wwwroot", "index.html"),
+        Path.Combine(AppContext.BaseDirectory, "wwwroot", "index.html"),
+    };
+
+    var path = candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+
+    if (path is null)
+    {
+        ctx.Response.StatusCode = 404;
+        await ctx.Response.WriteAsync(
+            "index.html not found. Place it at: wwwroot/index.html in the project root.");
+        return;
+    }
+
+    ctx.Response.ContentType = "text/html; charset=utf-8";
+    await ctx.Response.SendFileAsync(path);
+});
 
 app.UseAuthorization();
 app.MapControllers();
