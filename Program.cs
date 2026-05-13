@@ -1,3 +1,5 @@
+using System.IO;
+using BestInScript.API.Overlay;
 using BestInScript.API.Services;
 using Microsoft.OpenApi.Models;
 
@@ -20,6 +22,10 @@ builder.Services.AddSingleton<InputSimulatorService>();
 builder.Services.AddSingleton<HotkeyEngine>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
 
+// ── On-screen overlay ──────────────────────────────────────────────────────
+builder.Services.AddSingleton<OverlaySettingsStore>();
+builder.Services.AddHostedService<OverlayHostedService>();
+
 var app = builder.Build();
 
 app.UseSwagger();
@@ -29,21 +35,19 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// Serve index.html from wwwroot folder next to the project file.
-// AppContext.BaseDirectory points to bin\Debug\net10.0\ at runtime,
-// so we walk up to the project root (where wwwroot lives).
+// ── Serve index.html with the overlay-settings panel auto-injected ─────────
+// AppContext.BaseDirectory points to bin\Debug\net10.0-windows\ at runtime,
+// so we walk up to the project root (where wwwroot lives) and also fall back
+// to a sibling wwwroot for published builds.
 app.MapGet("/", async (HttpContext ctx) =>
 {
-    // Try project root first (dotnet run), then beside the exe (published)
-    var candidates = new[]
+    var indexCandidates = new[]
     {
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "wwwroot", "index.html"),
         Path.Combine(AppContext.BaseDirectory, "wwwroot", "index.html"),
     };
-
-    var path = candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
-
-    if (path is null)
+    var indexPath = indexCandidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+    if (indexPath is null)
     {
         ctx.Response.StatusCode = 404;
         await ctx.Response.WriteAsync(
@@ -51,11 +55,30 @@ app.MapGet("/", async (HttpContext ctx) =>
         return;
     }
 
+    // Partial lives next to index.html.
+    var dir = Path.GetDirectoryName(indexPath)!;
+    var partialPath = Path.Combine(dir, "_overlay-panel.html");
+
+    var html = await File.ReadAllTextAsync(indexPath);
+
+    // Idempotent injection: only splice in if our marker isn't already present
+    // (so a manually-pasted copy of the panel won't get duplicated).
+    const string marker = "BIS_OVERLAY_PANEL_MARKER";
+    if (File.Exists(partialPath) && !html.Contains(marker))
+    {
+        var partial = await File.ReadAllTextAsync(partialPath);
+
+        // Splice right before </body>; fall back to end-of-document if absent.
+        var idx = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+        html = idx >= 0
+            ? html.Insert(idx, partial + Environment.NewLine)
+            : html + Environment.NewLine + partial;
+    }
+
     ctx.Response.ContentType = "text/html; charset=utf-8";
-    await ctx.Response.SendFileAsync(path);
+    await ctx.Response.WriteAsync(html);
 });
 
 app.UseAuthorization();
 app.MapControllers();
-
 app.Run();

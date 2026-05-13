@@ -1,0 +1,230 @@
+<!--
+   ===========================================================================
+   BestInScript — Overlay settings panel
+   ---------------------------------------------------------------------------
+   Drop this <section> anywhere inside <body> in wwwroot/index.html.
+   Self-contained: scoped CSS, vanilla JS, no dependencies, no globals leaked.
+   ===========================================================================
+-->
+<section id="bis-overlay-panel">
+  <style>
+    #bis-overlay-panel {
+      max-width: 720px;
+      margin: 16px 0;
+      padding: 14px 18px;
+      background: #1c1f24;
+      border: 1px solid #2c313a;
+      border-radius: 8px;
+      color: #d8dee9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+    }
+    #bis-overlay-panel h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: .02em;
+      color: #f0f3f7;
+    }
+    #bis-overlay-panel .row {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 10px 14px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    #bis-overlay-panel label { color: #9aa4b2; }
+    #bis-overlay-panel select,
+    #bis-overlay-panel input[type=number] {
+      background: #0f1216;
+      border: 1px solid #2c313a;
+      color: #e6ebf2;
+      border-radius: 4px;
+      padding: 5px 7px;
+      font-size: 13px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #bis-overlay-panel .anchor-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      max-width: 180px;
+    }
+    #bis-overlay-panel .anchor-grid button {
+      aspect-ratio: 2 / 1;
+      background: #0f1216;
+      border: 1px solid #2c313a;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background .12s, border-color .12s;
+    }
+    #bis-overlay-panel .anchor-grid button:hover {
+      background: #1a1f27;
+    }
+    #bis-overlay-panel .anchor-grid button.active {
+      background: #284a78;
+      border-color: #4a82c9;
+    }
+    #bis-overlay-panel .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    #bis-overlay-panel .actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #bis-overlay-panel button.primary {
+      background: #2d5a9e;
+      border: 1px solid #4a82c9;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #bis-overlay-panel button.primary:hover { background: #3a6dba; }
+    #bis-overlay-panel .saved { color: #3ddc84; font-size: 12px; }
+  </style>
+
+  <h2>OVERLAY</h2>
+
+  <div class="check-row">
+    <input type="checkbox" id="bis-ov-enabled">
+    <label for="bis-ov-enabled" style="color:#d8dee9;">Show on-screen overlay</label>
+  </div>
+  <div class="check-row">
+    <input type="checkbox" id="bis-ov-hideidle">
+    <label for="bis-ov-hideidle" style="color:#d8dee9;">Hide when no script is running</label>
+  </div>
+
+  <div class="row">
+    <label>Display</label>
+    <select id="bis-ov-screen"></select>
+  </div>
+
+  <div class="row">
+    <label>Placement</label>
+    <div class="anchor-grid" id="bis-ov-anchors">
+      <button data-a="TopLeft"      title="Top left"></button>
+      <button data-a="TopCenter"    title="Top center"></button>
+      <button data-a="TopRight"     title="Top right"></button>
+      <button data-a="MiddleLeft"   title="Middle left"></button>
+      <button data-a="MiddleCenter" title="Center"></button>
+      <button data-a="MiddleRight"  title="Middle right"></button>
+      <button data-a="BottomLeft"   title="Bottom left"></button>
+      <button data-a="BottomCenter" title="Bottom center"></button>
+      <button data-a="BottomRight"  title="Bottom right"></button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Margin (px)</label>
+    <input type="number" id="bis-ov-margin" min="0" max="400" step="2">
+  </div>
+  <div class="row">
+    <label>Opacity</label>
+    <input type="number" id="bis-ov-opacity" min="0.1" max="1" step="0.05">
+  </div>
+  <div class="row">
+    <label>Font size</label>
+    <input type="number" id="bis-ov-fontsize" min="8" max="32" step="1">
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="bis-ov-save">Save overlay settings</button>
+    <span class="saved" id="bis-ov-saved" style="display:none">✓ saved</span>
+  </div>
+
+  <script>
+    (function () {
+      const $ = id => document.getElementById(id);
+      const els = {
+        enabled:  $('bis-ov-enabled'),
+        hideIdle: $('bis-ov-hideidle'),
+        screen:   $('bis-ov-screen'),
+        anchors:  $('bis-ov-anchors'),
+        margin:   $('bis-ov-margin'),
+        opacity:  $('bis-ov-opacity'),
+        fontSize: $('bis-ov-fontsize'),
+        save:     $('bis-ov-save'),
+        saved:    $('bis-ov-saved')
+      };
+      let current = null;
+
+      function paintAnchor(value) {
+        for (const b of els.anchors.querySelectorAll('button')) {
+          b.classList.toggle('active', b.dataset.a === value);
+        }
+      }
+
+      els.anchors.addEventListener('click', e => {
+        const btn = e.target.closest('button[data-a]');
+        if (!btn || !current) return;
+        current.anchor = btn.dataset.a;
+        paintAnchor(current.anchor);
+      });
+
+      async function loadScreens() {
+        try {
+          const r = await fetch('/api/overlay/screens');
+          const list = await r.json();
+          els.screen.innerHTML = '';
+          const primary = document.createElement('option');
+          primary.value = -1;
+          primary.textContent = 'Primary (auto)';
+          els.screen.appendChild(primary);
+          for (const s of list) {
+            const o = document.createElement('option');
+            o.value = s.index;
+            o.textContent =
+              `#${s.index + 1} ${s.name} (${s.width}×${s.height})` +
+              (s.isPrimary ? ' — primary' : '');
+            els.screen.appendChild(o);
+          }
+        } catch { /* keep dropdown empty if endpoint not available */ }
+      }
+
+      async function loadSettings() {
+        const r = await fetch('/api/overlay/settings');
+        current = await r.json();
+        els.enabled.checked  = !!current.enabled;
+        els.hideIdle.checked = !!current.hideWhenIdle;
+        els.screen.value     = current.screenIndex ?? -1;
+        els.margin.value     = current.margin   ?? 12;
+        els.opacity.value    = current.opacity  ?? 0.80;
+        els.fontSize.value   = current.fontSize ?? 12;
+        paintAnchor(current.anchor || 'TopRight');
+      }
+
+      els.save.addEventListener('click', async () => {
+        if (!current) return;
+        const payload = {
+          enabled:      els.enabled.checked,
+          hideWhenIdle: els.hideIdle.checked,
+          screenIndex:  parseInt(els.screen.value, 10),
+          anchor:       current.anchor || 'TopRight',
+          margin:       parseFloat(els.margin.value),
+          opacity:      parseFloat(els.opacity.value),
+          fontSize:     parseFloat(els.fontSize.value)
+        };
+        const r = await fetch('/api/overlay/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (r.ok) {
+          current = await r.json();
+          els.saved.style.display = 'inline';
+          setTimeout(() => els.saved.style.display = 'none', 1500);
+        }
+      });
+
+      loadScreens().then(loadSettings);
+    })();
+  </script>
+</section>

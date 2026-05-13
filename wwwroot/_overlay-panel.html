@@ -1,0 +1,348 @@
+<!-- BIS_OVERLAY_PANEL_MARKER -->
+<style>
+    /* Overlay-settings modal — themed off index.html CSS variables. */
+    #bis-ov-trigger {
+        background: var(--bg3);
+        color: var(--text);
+        padding: 6px 12px;
+        border: 1px solid var(--border);
+        margin-right: 8px;
+    }
+
+        #bis-ov-trigger:hover {
+            color: var(--accent);
+        }
+
+    #bis-ov-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, .55);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+        #bis-ov-backdrop.open {
+            display: flex;
+        }
+
+    #bis-ov-dialog {
+        width: 440px;
+        max-width: calc(100vw - 32px);
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text);
+        font-family: var(--font);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+        overflow: hidden;
+    }
+
+        #bis-ov-dialog header {
+            display: flex;
+            align-items: center;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg1);
+        }
+
+            #bis-ov-dialog header h2 {
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: .08em;
+                text-transform: uppercase;
+                color: var(--accent);
+                flex: 1;
+                margin: 0;
+            }
+
+    #bis-ov-close {
+        background: transparent;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1;
+        padding: 2px 8px;
+        border: none;
+    }
+
+        #bis-ov-close:hover {
+            color: var(--text);
+        }
+
+    #bis-ov-body {
+        padding: 16px 18px 8px;
+    }
+
+        #bis-ov-body .row {
+            display: grid;
+            grid-template-columns: 110px 1fr;
+            gap: 10px 14px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #bis-ov-body label {
+            margin: 0;
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        #bis-ov-body select,
+        #bis-ov-body input[type=number] {
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: var(--radius);
+            padding: 6px 8px;
+            font-size: 13px;
+            width: 100%;
+            font-family: var(--font);
+        }
+
+            #bis-ov-body select:focus,
+            #bis-ov-body input:focus {
+                outline: none;
+                border-color: var(--accent);
+            }
+
+    .bis-ov-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        color: var(--text);
+        font-size: 13px;
+    }
+
+        .bis-ov-check input {
+            accent-color: var(--accent);
+        }
+
+    #bis-ov-anchors {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+    }
+
+        #bis-ov-anchors button {
+            aspect-ratio: 2 / 1;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 0;
+            cursor: pointer;
+            transition: background .12s, border-color .12s;
+        }
+
+            #bis-ov-anchors button:hover {
+                background: var(--bg1);
+            }
+
+            #bis-ov-anchors button.active {
+                background: var(--accent);
+                border-color: var(--accent2);
+            }
+
+    #bis-ov-dialog footer {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 18px;
+        border-top: 1px solid var(--border);
+        background: var(--bg1);
+    }
+
+    #bis-ov-save {
+        background: var(--accent);
+        color: #1a1a25;
+        padding: 7px 16px;
+        border: none;
+        font-weight: 600;
+    }
+
+    #bis-ov-saved {
+        color: var(--green);
+        font-size: 12px;
+        opacity: 0;
+        transition: opacity .18s;
+    }
+
+        #bis-ov-saved.show {
+            opacity: 1;
+        }
+</style>
+
+<div id="bis-ov-backdrop" role="dialog" aria-modal="true" aria-labelledby="bis-ov-title">
+    <div id="bis-ov-dialog">
+        <header>
+            <h2 id="bis-ov-title">Overlay Settings</h2>
+            <button id="bis-ov-close" type="button" aria-label="Close">✕</button>
+        </header>
+
+        <div id="bis-ov-body">
+            <label class="bis-ov-check">
+                <input type="checkbox" id="bis-ov-enabled">
+                <span>Show on-screen overlay</span>
+            </label>
+            <label class="bis-ov-check">
+                <input type="checkbox" id="bis-ov-hideidle">
+                <span>Hide when no script is running</span>
+            </label>
+
+            <div class="row">
+                <label for="bis-ov-screen">Display</label>
+                <select id="bis-ov-screen"></select>
+            </div>
+
+            <div class="row">
+                <label>Placement</label>
+                <div id="bis-ov-anchors">
+                    <button type="button" data-a="TopLeft" title="Top left"></button>
+                    <button type="button" data-a="TopCenter" title="Top center"></button>
+                    <button type="button" data-a="TopRight" title="Top right"></button>
+                    <button type="button" data-a="MiddleLeft" title="Middle left"></button>
+                    <button type="button" data-a="MiddleCenter" title="Center"></button>
+                    <button type="button" data-a="MiddleRight" title="Middle right"></button>
+                    <button type="button" data-a="BottomLeft" title="Bottom left"></button>
+                    <button type="button" data-a="BottomCenter" title="Bottom center"></button>
+                    <button type="button" data-a="BottomRight" title="Bottom right"></button>
+                </div>
+            </div>
+
+            <div class="row">
+                <label for="bis-ov-margin">Margin</label>
+                <input type="number" id="bis-ov-margin" min="0" max="400" step="2">
+            </div>
+            <div class="row">
+                <label for="bis-ov-opacity">Opacity</label>
+                <input type="number" id="bis-ov-opacity" min="0.1" max="1" step="0.05">
+            </div>
+            <div class="row">
+                <label for="bis-ov-fontsize">Font size</label>
+                <input type="number" id="bis-ov-fontsize" min="8" max="32" step="1">
+            </div>
+        </div>
+
+        <footer>
+            <button id="bis-ov-save" type="button">Save</button>
+            <span id="bis-ov-saved">Saved</span>
+        </footer>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const $ = id => document.getElementById(id);
+
+        // 1. Inject the trigger button into the existing header, just before "Stop All".
+        const stopBtn = $('btn-stop-all');
+        if (stopBtn && !$('bis-ov-trigger')) {
+            const btn = document.createElement('button');
+            btn.id = 'bis-ov-trigger';
+            btn.type = 'button';
+            btn.textContent = '⚙ Overlay';
+            stopBtn.parentNode.insertBefore(btn, stopBtn);
+        }
+
+        const els = {
+            trigger: $('bis-ov-trigger'),
+            backdrop: $('bis-ov-backdrop'),
+            close: $('bis-ov-close'),
+            enabled: $('bis-ov-enabled'),
+            hideIdle: $('bis-ov-hideidle'),
+            screen: $('bis-ov-screen'),
+            anchors: $('bis-ov-anchors'),
+            margin: $('bis-ov-margin'),
+            opacity: $('bis-ov-opacity'),
+            fontSize: $('bis-ov-fontsize'),
+            save: $('bis-ov-save'),
+            saved: $('bis-ov-saved')
+        };
+        let current = null;
+
+        function paintAnchor(value) {
+            els.anchors.querySelectorAll('button').forEach(b => {
+                b.classList.toggle('active', b.dataset.a === value);
+            });
+        }
+
+        function open() {
+            loadScreens().then(loadSettings).then(() => {
+                els.backdrop.classList.add('open');
+            });
+        }
+        function close() { els.backdrop.classList.remove('open'); }
+
+        els.trigger && els.trigger.addEventListener('click', open);
+        els.close.addEventListener('click', close);
+        els.backdrop.addEventListener('click', e => {
+            if (e.target === els.backdrop) close();
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && els.backdrop.classList.contains('open')) close();
+        });
+
+        els.anchors.addEventListener('click', e => {
+            const btn = e.target.closest('button[data-a]');
+            if (!btn || !current) return;
+            current.anchor = btn.dataset.a;
+            paintAnchor(current.anchor);
+        });
+
+        async function loadScreens() {
+            try {
+                const r = await fetch('/api/overlay/screens');
+                const list = await r.json();
+                els.screen.innerHTML = '';
+                const primary = document.createElement('option');
+                primary.value = -1;
+                primary.textContent = 'Primary (auto)';
+                els.screen.appendChild(primary);
+                list.forEach(s => {
+                    const o = document.createElement('option');
+                    o.value = s.index;
+                    o.textContent =
+                        '#' + (s.index + 1) + ' ' + s.name + ' (' + s.width + '×' + s.height + ')' +
+                        (s.isPrimary ? ' — primary' : '');
+                    els.screen.appendChild(o);
+                });
+            } catch (_) { /* leave dropdown as-is */ }
+        }
+
+        async function loadSettings() {
+            const r = await fetch('/api/overlay/settings');
+            current = await r.json();
+            els.enabled.checked = !!current.enabled;
+            els.hideIdle.checked = !!current.hideWhenIdle;
+            els.screen.value = current.screenIndex != null ? current.screenIndex : -1;
+            els.margin.value = current.margin != null ? current.margin : 12;
+            els.opacity.value = current.opacity != null ? current.opacity : 0.80;
+            els.fontSize.value = current.fontSize != null ? current.fontSize : 12;
+            paintAnchor(current.anchor || 'TopRight');
+        }
+
+        els.save.addEventListener('click', async () => {
+            if (!current) return;
+            const payload = {
+                enabled: els.enabled.checked,
+                hideWhenIdle: els.hideIdle.checked,
+                screenIndex: parseInt(els.screen.value, 10),
+                anchor: current.anchor || 'TopRight',
+                margin: parseFloat(els.margin.value),
+                opacity: parseFloat(els.opacity.value),
+                fontSize: parseFloat(els.fontSize.value)
+            };
+            const r = await fetch('/api/overlay/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (r.ok) {
+                current = await r.json();
+                els.saved.classList.add('show');
+                setTimeout(() => els.saved.classList.remove('show'), 1300);
+            }
+        });
+    })();
+</script>
