@@ -11,38 +11,45 @@ namespace BestInScript.API.Services
     /// toggled on/off; scripts run indefinitely in their own Task until cancelled.
     ///
     /// The trigger key is NOT suppressed – the game still receives it.
+    ///
+    /// EXECUTION MODES
+    /// ---------------
+    /// • Blind loop (default): the step sequence repeats continuously while the
+    ///   script is toggled on.
+    /// • Pixel-gated: if the script has a <see cref="PixelTrigger"/>, the engine
+    ///   watches one screen pixel and runs the step sequence once each time that
+    ///   pixel matches the "ready" color — e.g. autocasting a cooldown skill.
     /// </summary>
     public class HotkeyEngine : IHostedService, IDisposable
     {
         // ── Win32 ──────────────────────────────────────────────────────────────
-
-        private const int  WH_KEYBOARD_LL  = 13;
-        private const int  WM_KEYDOWN      = 0x0100;
-        private const int  WM_SYSKEYDOWN   = 0x0104;
-        private const uint WM_QUIT         = 0x0012;
+        private const int WH_KEYBOARD_LL = 13;
+        private const int WM_KEYDOWN = 0x0100;
+        private const int WM_SYSKEYDOWN = 0x0104;
+        private const uint WM_QUIT = 0x0012;
 
         private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct KBDLLHOOKSTRUCT
         {
-            public uint  vkCode;
-            public uint  scanCode;
-            public uint  flags;
-            public uint  time;
-            public nint  dwExtraInfo;
+            public uint vkCode;
+            public uint scanCode;
+            public uint flags;
+            public uint time;
+            public nint dwExtraInfo;
         }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct MSG
         {
-            public nint  hwnd;
-            public uint  message;
+            public nint hwnd;
+            public uint message;
             public nuint wParam;
-            public nint  lParam;
-            public uint  time;
-            public int   ptX;
-            public int   ptY;
+            public nint lParam;
+            public uint time;
+            public int ptX;
+            public int ptY;
         }
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -75,35 +82,35 @@ namespace BestInScript.API.Services
         private static extern uint GetCurrentThreadId();
 
         // ── State ──────────────────────────────────────────────────────────────
-
         private readonly ILogger<HotkeyEngine> _logger;
-        private readonly ScriptRepository       _repo;
-        private readonly InputSimulatorService  _inputSim;
+        private readonly ScriptRepository _repo;
+        private readonly InputSimulatorService _inputSim;
+        private readonly ScreenColorService _screen;
 
         // vkCode → script entry
         private readonly ConcurrentDictionary<ushort, ScriptEntry> _registry = new();
 
-        private Thread?               _hookThread;
-        private uint                  _hookThreadId;
-        private IntPtr                _hookHandle = IntPtr.Zero;
-        private LowLevelKeyboardProc? _hookProc;   // must keep reference to prevent GC
+        private Thread? _hookThread;
+        private uint _hookThreadId;
+        private IntPtr _hookHandle = IntPtr.Zero;
+        private LowLevelKeyboardProc? _hookProc; // must keep reference to prevent GC
 
         private readonly object _toggleLock = new();
 
         // ── Construction ───────────────────────────────────────────────────────
-
         public HotkeyEngine(
             ILogger<HotkeyEngine> logger,
             ScriptRepository repo,
-            InputSimulatorService inputSim)
+            InputSimulatorService inputSim,
+            ScreenColorService screen)
         {
-            _logger   = logger;
-            _repo     = repo;
+            _logger = logger;
+            _repo = repo;
             _inputSim = inputSim;
+            _screen = screen;
         }
 
         // ── IHostedService ─────────────────────────────────────────────────────
-
         public Task StartAsync(CancellationToken cancellationToken)
         {
             LoadFromRepository();
@@ -111,7 +118,7 @@ namespace BestInScript.API.Services
             _hookThread = new Thread(RunHookThread)
             {
                 IsBackground = true,
-                Name         = "BIS_HookThread"
+                Name = "BIS_HookThread"
             };
             _hookThread.Start();
 
@@ -160,6 +167,7 @@ namespace BestInScript.API.Services
 
             var entry = new ScriptEntry(config);
             _registry[vk] = entry;
+
             _logger.LogInformation("Registered script '{Name}' on key '{Key}' (VK=0x{VK:X2})",
                 config.Name, config.TriggerKey, vk);
         }
@@ -179,10 +187,10 @@ namespace BestInScript.API.Services
         public IEnumerable<ScriptStatus> GetStatus()
             => _registry.Values.Select(e => new ScriptStatus
             {
-                Id         = e.Config.Id,
-                Name       = e.Config.Name,
+                Id = e.Config.Id,
+                Name = e.Config.Name,
                 TriggerKey = e.Config.TriggerKey,
-                IsRunning  = e.IsRunning
+                IsRunning = e.IsRunning
             });
 
         /// <summary>Stops all running scripts immediately.</summary>
@@ -193,16 +201,15 @@ namespace BestInScript.API.Services
         }
 
         // ── Hook thread ────────────────────────────────────────────────────────
-
         private void RunHookThread()
         {
             _hookThreadId = GetCurrentThreadId();
-            _hookProc     = HookCallback;   // keep GC-reachable reference on stack/field
+            _hookProc = HookCallback; // keep GC-reachable reference on stack/field
 
-            using var proc   = Process.GetCurrentProcess();
+            using var proc = Process.GetCurrentProcess();
             using var module = proc.MainModule!;
             _hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc,
-                              GetModuleHandle(module.ModuleName), 0);
+                GetModuleHandle(module.ModuleName), 0);
 
             if (_hookHandle == IntPtr.Zero)
             {
@@ -228,16 +235,16 @@ namespace BestInScript.API.Services
         {
             if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN))
             {
-                var kbs   = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+                var kbs = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
                 var vkCode = (ushort)kbs.vkCode;
                 ToggleScript(vkCode);
             }
+
             // Always call next hook – key passes through to the game.
             return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
         }
 
         // ── Toggle logic ───────────────────────────────────────────────────────
-
         private void ToggleScript(ushort vkCode)
         {
             if (!_registry.TryGetValue(vkCode, out var entry)) return;
@@ -259,51 +266,32 @@ namespace BestInScript.API.Services
             }
         }
 
-        // ── Script execution loop ──────────────────────────────────────────────
+        // ── Script execution ───────────────────────────────────────────────────
 
-        private async Task RunScriptAsync(ScriptEntry entry, CancellationToken ct)
+        /// <summary>
+        /// Entry point for a toggled-on script. Dispatches to the blind loop or
+        /// the pixel-gated loop depending on whether a PixelTrigger is set.
+        /// </summary>
+        private Task RunScriptAsync(ScriptEntry entry, CancellationToken ct)
+            => entry.Config.PixelTrigger is null
+                ? RunBlindLoopAsync(entry, ct)
+                : RunPixelGatedAsync(entry, ct);
+
+        /// <summary>
+        /// Default mode: loop the step sequence continuously until cancelled.
+        /// Held keys persist across steps AND loop iterations — a key listed in
+        /// consecutive steps stays physically down instead of fluttering.
+        /// </summary>
+        private async Task RunBlindLoopAsync(ScriptEntry entry, CancellationToken ct)
         {
             var rng = Random.Shared;
             var config = entry.Config;
-
-            // Keys currently held down — persists across steps AND loop iterations.
             var heldKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             try
             {
                 while (!ct.IsCancellationRequested)
-                {
-                    foreach (var step in config.Steps)
-                    {
-                        if (ct.IsCancellationRequested) break;
-
-                        // 1. Release only keys held previously that this step no longer needs
-                        foreach (var key in heldKeys
-                                     .Where(k => !step.Hold.Contains(k, StringComparer.OrdinalIgnoreCase))
-                                     .ToList())
-                        {
-                            _inputSim.KeyUp(key);
-                            heldKeys.Remove(key);
-                        }
-
-                        // 2. Press hold keys not already down; keys still held just stay down
-                        foreach (var key in step.Hold)
-                        {
-                            if (heldKeys.Add(key))
-                                _inputSim.KeyDown(key);
-                        }
-
-                        // 3. Tap each press key
-                        foreach (var key in step.Press)
-                            _inputSim.KeyPress(key);
-
-                        // 4. Random delay in [DelayMin, DelayMax]
-                        var delay = config.DelayMin
-                            + (config.DelayMax - config.DelayMin) * rng.NextDouble();
-
-                        await Task.Delay(TimeSpan.FromSeconds(delay), ct);
-                    }
-                }
+                    await RunStepsOnceAsync(config, heldKeys, rng, ct);
             }
             catch (OperationCanceledException)
             {
@@ -315,22 +303,167 @@ namespace BestInScript.API.Services
             }
             finally
             {
-                // Safety: release every key still held
-                foreach (var key in heldKeys)
-                    _inputSim.KeyUp(key);
-                heldKeys.Clear();
-
+                ReleaseHeld(heldKeys);
                 entry.Cts = null;
             }
         }
 
-        // ── Helpers ────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Pixel-gated mode: watch one screen pixel and run the step sequence
+        /// when the pixel reads as "ready". Behavior depends on
+        /// <see cref="PixelTrigger.RequireReset"/>:
+        ///
+        /// • false (continuous autocast) — fires every time a "ready" sample
+        ///   is observed, gated only by the re-arm delay. If the pixel stays
+        ///   ready, it keeps firing.
+        ///
+        /// • true (one-shot per cycle) — fires once when the pixel becomes
+        ///   ready, then disarms until at least one non-ready sample resets
+        ///   it. The pixel must return to a non-ready state (typically the
+        ///   cooldown color) before another fire can happen.
+        /// </summary>
+        private async Task RunPixelGatedAsync(ScriptEntry entry, CancellationToken ct)
+        {
+            var rng = Random.Shared;
+            var config = entry.Config;
+            var pt = config.PixelTrigger!;
+            var heldKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            // Clamp config to sane floors so a bad value can't peg the CPU.
+            int pollMs = Math.Max(15, pt.PollIntervalMs);
+            int reArmMs = Math.Max(0, pt.ReArmDelayMs);
+            int radius = Math.Clamp(pt.SampleRadius, 0, 8);
+            bool warnedUnreadable = false;
+
+            // One-shot state machine. When RequireReset is false this stays
+            // true forever and the loop behaves like pure autocast. When true,
+            // it goes false after each fire and only comes back true once we
+            // observe the pixel in a non-ready state — i.e. the user's
+            // "reset to initial state" requirement.
+            bool armed = true;
+
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    var color = _screen.ColorAtAveraged(pt.X, pt.Y, radius);
+
+                    if (color is null)
+                    {
+                        // Screen unreadable (e.g. fullscreen-exclusive game).
+                        // Warn once, then back off harder than the poll interval
+                        // so we don't spin on a black screen.
+                        if (!warnedUnreadable)
+                        {
+                            _logger.LogWarning(
+                                "PixelTrigger '{Name}': cannot read screen at ({X},{Y}). " +
+                                "Is the game in fullscreen-exclusive mode? Switch to borderless.",
+                                config.Name, pt.X, pt.Y);
+                            warnedUnreadable = true;
+                        }
+                        await Task.Delay(Math.Max(pollMs, 250), ct);
+                        continue;
+                    }
+                    warnedUnreadable = false;
+
+                    var c = color.Value;
+                    var live = new[] { c.R, c.G, c.B };
+                    double dReady = ScreenColorService.Distance(live, pt.ReadyColor);
+                    double dCool = ScreenColorService.Distance(live, pt.CooldownColor);
+
+                    // "Ready" means: close enough to the ready color in absolute
+                    // terms, AND closer to ready than to cooldown. The second
+                    // test is what makes a two-color trigger robust to the
+                    // lighting/animation drift a single threshold can't handle.
+                    bool ready = dReady <= pt.Tolerance && dReady < dCool;
+
+                    if (ready && armed)
+                    {
+                        await RunStepsOnceAsync(config, heldKeys, rng, ct);
+                        ReleaseHeld(heldKeys);          // each cast is a discrete burst
+                        if (pt.RequireReset) armed = false;
+                        if (reArmMs > 0)
+                            await Task.Delay(reArmMs, ct);
+                    }
+                    else
+                    {
+                        // Any non-ready observation re-arms the trigger. (When
+                        // RequireReset is false, armed is already true and this
+                        // is a no-op — so the autocast path is unchanged.)
+                        if (!ready) armed = true;
+                        await Task.Delay(pollMs, ct);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal stop path – swallow
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled error in pixel-gated script '{Name}'", config.Name);
+            }
+            finally
+            {
+                ReleaseHeld(heldKeys);
+                entry.Cts = null;
+            }
+        }
+
+        /// <summary>
+        /// Runs every step of a script exactly once. <paramref name="heldKeys"/>
+        /// tracks which keys are physically down so a key common to consecutive
+        /// steps is not released and re-pressed — it just stays held.
+        /// </summary>
+        private async Task RunStepsOnceAsync(
+            ScriptConfig config, HashSet<string> heldKeys, Random rng, CancellationToken ct)
+        {
+            foreach (var step in config.Steps)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                // 1. Release only keys held previously that this step no longer needs
+                foreach (var key in heldKeys
+                             .Where(k => !step.Hold.Contains(k, StringComparer.OrdinalIgnoreCase))
+                             .ToList())
+                {
+                    _inputSim.KeyUp(key);
+                    heldKeys.Remove(key);
+                }
+
+                // 2. Press hold keys not already down; keys still held just stay down
+                foreach (var key in step.Hold)
+                {
+                    if (heldKeys.Add(key))
+                        _inputSim.KeyDown(key);
+                }
+
+                // 3. Tap each press key
+                foreach (var key in step.Press)
+                    _inputSim.KeyPress(key);
+
+                // 4. Random delay in [DelayMin, DelayMax]
+                var delay = config.DelayMin
+                    + (config.DelayMax - config.DelayMin) * rng.NextDouble();
+                await Task.Delay(TimeSpan.FromSeconds(delay), ct);
+            }
+        }
+
+        /// <summary>Releases every key in the set and clears it.</summary>
+        private void ReleaseHeld(HashSet<string> heldKeys)
+        {
+            foreach (var key in heldKeys)
+                _inputSim.KeyUp(key);
+            heldKeys.Clear();
+        }
+
+        // ── Helpers ────────────────────────────────────────────────────────────
         private static void StopEntry(ScriptEntry entry)
         {
             var cts = entry.Cts;
             if (cts == null) return;
-            try   { cts.Cancel(); }
+
+            try { cts.Cancel(); }
             catch { /* already cancelled */ }
             entry.Cts = null;
         }
@@ -343,20 +476,19 @@ namespace BestInScript.API.Services
         }
 
         // ── Nested types ───────────────────────────────────────────────────────
-
         private sealed class ScriptEntry(ScriptConfig config)
         {
-            public ScriptConfig              Config    { get; }     = config;
-            public CancellationTokenSource?  Cts       { get; set; }
-            public bool                      IsRunning => Cts != null && !Cts.IsCancellationRequested;
+            public ScriptConfig Config { get; } = config;
+            public CancellationTokenSource? Cts { get; set; }
+            public bool IsRunning => Cts != null && !Cts.IsCancellationRequested;
         }
     }
 
     public class ScriptStatus
     {
-        public Guid   Id         { get; set; }
-        public string Name       { get; set; } = "";
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
         public string TriggerKey { get; set; } = "";
-        public bool   IsRunning  { get; set; }
+        public bool IsRunning { get; set; }
     }
 }

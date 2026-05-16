@@ -27,5 +27,14 @@ namespace BestInScript.API.Models
 
         /// <summary>Maximum random delay between steps (seconds). Max allowed: 5.0</summary>
         public double DelayMax { get; set; } = 0.6;
+
+        /// <summary>
+        /// Optional screen-color gate. When null (the default) the script loops
+        /// its steps continuously while toggled on. When set, the engine watches
+        /// the configured pixel and only runs the step sequence while that pixel
+        /// matches the "ready" color — e.g. to autocast a skill the instant it
+        /// comes off cooldown. See <see cref="PixelTrigger"/>.
+        /// </summary>
+        public PixelTrigger? PixelTrigger { get; set; }
     }
 }

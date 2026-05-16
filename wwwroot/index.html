@@ -636,6 +636,206 @@
                     background: var(--bg3);
                     color: var(--accent2);
                 }
+
+        /* ── Pixel Trigger panel ──────────────────────────────────────────── */
+        .pt-toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .switch {
+            position: relative;
+            width: 42px;
+            height: 23px;
+            flex-shrink: 0;
+        }
+
+            .switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+            }
+
+            .switch .slider {
+                position: absolute;
+                inset: 0;
+                background: var(--bg3);
+                border: 1px solid var(--border);
+                border-radius: 23px;
+                transition: background .15s;
+            }
+
+                .switch .slider::before {
+                    content: '';
+                    position: absolute;
+                    width: 17px;
+                    height: 17px;
+                    left: 2px;
+                    top: 2px;
+                    background: var(--muted);
+                    border-radius: 50%;
+                    transition: transform .15s, background .15s;
+                }
+
+            .switch input:checked + .slider {
+                background: var(--accent);
+                border-color: var(--accent);
+            }
+
+                .switch input:checked + .slider::before {
+                    transform: translateX(19px);
+                    background: #000;
+                }
+
+        .pt-disabled-note {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.6;
+            margin-top: 14px;
+        }
+
+        .pt-body {
+            margin-top: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .pt-sub {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px;
+        }
+
+        .pt-sub-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        .pt-coord-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+            .pt-coord-row .form-group {
+                min-width: 90px;
+            }
+
+        .btn-sample {
+            background: var(--bg3);
+            color: var(--text);
+            padding: 7px 13px;
+            border: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+            .btn-sample.counting {
+                background: var(--accent);
+                color: #000;
+                border-color: var(--accent);
+            }
+
+            .btn-sample:disabled {
+                opacity: .4;
+                cursor: not-allowed;
+            }
+
+        .pt-hint {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 8px;
+            line-height: 1.5;
+        }
+
+        .pt-color-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .pt-color-box {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .pt-swatch-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pt-swatch {
+            width: 46px;
+            height: 46px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            background: var(--bg0);
+        }
+
+        .pt-rgb {
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+            .pt-rgb .muted {
+                color: var(--muted);
+            }
+
+        .pt-live-readout {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--bg0);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+        }
+
+        .pt-verdict {
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 20px;
+            letter-spacing: .04em;
+            white-space: nowrap;
+        }
+
+            .pt-verdict.ready {
+                background: #1d3d28;
+                color: var(--green);
+                border: 1px solid #2e6645;
+            }
+
+            .pt-verdict.waiting {
+                background: #3a2d1a;
+                color: var(--accent2);
+                border: 1px solid #5e4a2e;
+            }
+
+            .pt-verdict.nomatch {
+                background: #3d1d1d;
+                color: var(--red);
+                border: 1px solid #663030;
+            }
+
+            .pt-verdict.offline {
+                background: var(--bg3);
+                color: var(--muted);
+                border: 1px solid var(--border);
+            }
     </style>
 </head>
 <body>
@@ -702,6 +902,10 @@
         let isNew = false;
         let capturing = false;
 
+        // Pixel-trigger UI state
+        let pixelLiveTimer = null;   // setInterval handle for the live readout
+        let sampleBusy = false;      // a countdown sample is in progress
+
         // ── Bootstrap ────────────────────────────────────────────────────────────────
         (async () => {
             await loadScripts();
@@ -748,15 +952,16 @@
             el.innerHTML = scripts.map(s => {
                 const running = !!statuses[s.id];
                 const sel = selected && selected.id === s.id ? 'selected' : '';
+                const pixelTag = s.pixelTrigger ? ' · 👁 pixel' : '';
                 return `
-          <div class="script-card ${sel}" data-id="${s.id}" onclick="selectScript('${s.id}')">
-            <div class="key-badge">${esc(s.triggerKey)}</div>
-            <div class="info">
-              <div class="name">${esc(s.name)}</div>
-              <div class="meta">${s.steps.length} step${s.steps.length !== 1 ? 's' : ''} · ${s.delayMin}–${s.delayMax}s</div>
-            </div>
-            ${running ? '<div class="running-pill">● ON</div>' : ''}
-          </div>`;
+              <div class="script-card ${sel}" data-id="${s.id}" onclick="selectScript('${s.id}')">
+                <div class="key-badge">${esc(s.triggerKey)}</div>
+                <div class="info">
+                  <div class="name">${esc(s.name)}</div>
+                  <div class="meta">${s.steps.length} step${s.steps.length !== 1 ? 's' : ''} · ${s.delayMin}–${s.delayMax}s${pixelTag}</div>
+                </div>
+                ${running ? '<div class="running-pill">● ON</div>' : ''}
+              </div>`;
             }).join('');
         }
 
@@ -764,21 +969,25 @@
         function selectScript(id) {
             const s = scripts.find(x => x.id === id);
             if (!s) return;
+            stopPixelLive();
             isNew = false;
             selected = JSON.parse(JSON.stringify(s)); // deep copy
             renderEditor();
         }
 
         function newScript() {
+            stopPixelLive();
             isNew = true;
             selected = {
                 id: null, name: 'New Script', triggerKey: '3',
-                steps: [{ hold: [], press: [] }], delayMin: 0.4, delayMax: 0.6
+                steps: [{ hold: [], press: [] }], delayMin: 0.4, delayMax: 0.6,
+                pixelTrigger: null
             };
             renderEditor();
         }
 
         function showNoScript() {
+            stopPixelLive();
             selected = null;
             document.getElementById('no-script').style.display = 'flex';
             // remove any injected panels
@@ -787,6 +996,9 @@
 
         // ── Editor render ─────────────────────────────────────────────────────────────
         function renderEditor() {
+            // Any live readout belongs to the previous render's DOM — kill it first.
+            stopPixelLive();
+
             const noScript = document.getElementById('no-script');
             noScript.style.display = 'none';
 
@@ -797,50 +1009,74 @@
 
             // ── Basic settings panel ──
             const basic = mkPanel('Basic Settings', `
-        <div class="form-row">
-          <div class="form-group full">
-            <label>Script Name</label>
-            <input id="f-name" type="text" value="${esc(selected.name)}" placeholder="e.g. Hammerwing Rotation" />
-          </div>
-
-          <div class="form-group">
-            <label>Trigger Key <span style="color:var(--muted);font-weight:400;text-transform:none">(keyboard only)</span></label>
-            <div id="trigger-capture">
-              <div id="trigger-display">${esc(selected.triggerKey)}</div>
-              <button id="btn-capture" onclick="startCapture()">Click to Capture</button>
-            </div>
-            <div style="font-size:11px;color:var(--muted);margin-top:5px">Press this key in-game to toggle the script on/off.</div>
-          </div>
-
-          <div class="form-group">
-            <label>Delay Between Steps</label>
-            <div class="delay-row">
-              <div class="delay-group">
-                <label style="margin-bottom:2px">Min <span class="val" id="lbl-dmin">${selected.delayMin}s</span></label>
-                <input id="f-dmin" type="range" min="0.1" max="5" step="0.05"
-                  value="${selected.delayMin}" oninput="syncDelay()" />
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Script Name</label>
+                <input id="f-name" type="text" value="${esc(selected.name)}" placeholder="e.g. Hammerwing Rotation" />
               </div>
-              <div class="delay-group">
-                <label style="margin-bottom:2px">Max <span class="val" id="lbl-dmax">${selected.delayMax}s</span></label>
-                <input id="f-dmax" type="range" min="0.1" max="5" step="0.05"
-                  value="${selected.delayMax}" oninput="syncDelay()" />
+
+              <div class="form-group">
+                <label>Trigger Key <span style="color:var(--muted);font-weight:400;text-transform:none">(keyboard only)</span></label>
+                <div id="trigger-capture">
+                  <div id="trigger-display">${esc(selected.triggerKey)}</div>
+                  <button id="btn-capture" onclick="startCapture()">Click to Capture</button>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-top:5px">Press this key in-game to toggle the script on/off.</div>
+              </div>
+
+              <div class="form-group">
+                <label>Delay Between Steps</label>
+                <div class="delay-row">
+                  <div class="delay-group">
+                    <label style="margin-bottom:2px">Min <span class="val" id="lbl-dmin">${selected.delayMin}s</span></label>
+                    <input id="f-dmin" type="range" min="0.1" max="5" step="0.05"
+                      value="${selected.delayMin}" oninput="syncDelay()" />
+                  </div>
+                  <div class="delay-group">
+                    <label style="margin-bottom:2px">Max <span class="val" id="lbl-dmax">${selected.delayMax}s</span></label>
+                    <input id="f-dmax" type="range" min="0.1" max="5" step="0.05"
+                      value="${selected.delayMax}" oninput="syncDelay()" />
+                  </div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-top:5px">Each step waits a random time in this window. Randomness avoids detection.</div>
               </div>
             </div>
-            <div style="font-size:11px;color:var(--muted);margin-top:5px">Each step waits a random time in this window. Randomness avoids detection.</div>
-          </div>
-        </div>
-      `);
+          `);
             editor.appendChild(basic);
+
+            // ── Pixel trigger panel ──
+            const pixelPanel = mkPanel('Pixel Trigger — Autocast', `
+            <div class="pt-toggle-row">
+              <label class="switch">
+                <input type="checkbox" id="pt-enable" ${selected.pixelTrigger ? 'checked' : ''}
+                  onchange="togglePixelTrigger(this.checked)" />
+                <span class="slider"></span>
+              </label>
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--text)">
+                  Only run while a screen pixel matches a “ready” color
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px">
+                  Watches a skill icon and fires the steps the moment it comes off cooldown.
+                </div>
+              </div>
+            </div>
+            <div id="pt-body-wrap"></div>
+          `);
+            editor.appendChild(pixelPanel);
+            renderPixelPanel();
 
             // ── Steps panel ──
             const stepsPanel = mkPanel('Script Steps', `
-        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
-          Each step: hold keys are pressed down → press keys are tapped → hold keys are released → random delay.
-          Steps loop indefinitely while the script is active.
-        </div>
-        <div id="steps-list"></div>
-        <button id="btn-add-step" onclick="addStep()">+ Add Step</button>
-      `);
+            <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+              Each step: hold keys are pressed down → press keys are tapped → hold keys no longer
+              needed are released → random delay. A hold key shared by consecutive steps stays
+              down instead of fluttering. Steps loop while the script is active (or run once per
+              “ready” detection when a pixel trigger is set).
+            </div>
+            <div id="steps-list"></div>
+            <button id="btn-add-step" onclick="addStep()">+ Add Step</button>
+          `);
             editor.appendChild(stepsPanel);
 
             renderSteps();
@@ -849,10 +1085,10 @@
             const bar = document.createElement('div');
             bar.className = 'action-bar';
             bar.innerHTML = `
-        <button id="btn-delete" onclick="deleteScript()" ${isNew ? 'style="display:none"' : ''}>🗑 Delete</button>
-        <div class="spacer"></div>
-        <button id="btn-save" onclick="saveScript()">💾 Save Script</button>
-      `;
+            <button id="btn-delete" onclick="deleteScript()" ${isNew ? 'style="display:none"' : ''}>🗑 Delete</button>
+            <div class="spacer"></div>
+            <button id="btn-save" onclick="saveScript()">💾 Save Script</button>
+          `;
             editor.appendChild(bar);
 
             // Highlight selected card
@@ -876,36 +1112,36 @@
                 card.className = 'step-card';
                 card.dataset.idx = i;
                 card.innerHTML = `
-          <div class="step-header">
-            <span class="step-number">STEP ${i + 1}</span>
-            <span></span>
-            <button class="btn-remove-step" onclick="removeStep(${i})">✕ Remove</button>
-          </div>
-          <div class="step-section">
-            <label>Hold Keys <span style="font-weight:400;text-transform:none;color:var(--muted)">(held down for entire step)</span></label>
-            <div class="key-chips" id="hold-chips-${i}"></div>
-            <div class="add-key-row">
-              <div class="key-input-wrap" style="flex:1">
-                <input id="hold-input-${i}" type="text" placeholder="e.g. Shift, Ctrl" autocomplete="off"
-                  oninput="showAC(this,'hold',${i})" onkeydown="keyInputDown(event,'hold',${i})" />
-                <div class="ac-list" id="hold-ac-${i}" style="display:none"></div>
+              <div class="step-header">
+                <span class="step-number">STEP ${i + 1}</span>
+                <span></span>
+                <button class="btn-remove-step" onclick="removeStep(${i})">✕ Remove</button>
               </div>
-              <button class="btn-add-key" onclick="addKey('hold',${i})">+ Add</button>
-            </div>
-          </div>
-          <div class="step-section" style="margin-bottom:0">
-            <label>Press Keys <span style="font-weight:400;text-transform:none;color:var(--muted)">(tap once per step)</span></label>
-            <div class="key-chips" id="press-chips-${i}"></div>
-            <div class="add-key-row">
-              <div class="key-input-wrap" style="flex:1">
-                <input id="press-input-${i}" type="text" placeholder="e.g. Mouse1, Q, E" autocomplete="off"
-                  oninput="showAC(this,'press',${i})" onkeydown="keyInputDown(event,'press',${i})" />
-                <div class="ac-list" id="press-ac-${i}" style="display:none"></div>
+              <div class="step-section">
+                <label>Hold Keys <span style="font-weight:400;text-transform:none;color:var(--muted)">(held down for entire step)</span></label>
+                <div class="key-chips" id="hold-chips-${i}"></div>
+                <div class="add-key-row">
+                  <div class="key-input-wrap" style="flex:1">
+                    <input id="hold-input-${i}" type="text" placeholder="e.g. Shift, Ctrl" autocomplete="off"
+                      oninput="showAC(this,'hold',${i})" onkeydown="keyInputDown(event,'hold',${i})" />
+                    <div class="ac-list" id="hold-ac-${i}" style="display:none"></div>
+                  </div>
+                  <button class="btn-add-key" onclick="addKey('hold',${i})">+ Add</button>
+                </div>
               </div>
-              <button class="btn-add-key" onclick="addKey('press',${i})">+ Add</button>
-            </div>
-          </div>
-        `;
+              <div class="step-section" style="margin-bottom:0">
+                <label>Press Keys <span style="font-weight:400;text-transform:none;color:var(--muted)">(tap once per step)</span></label>
+                <div class="key-chips" id="press-chips-${i}"></div>
+                <div class="add-key-row">
+                  <div class="key-input-wrap" style="flex:1">
+                    <input id="press-input-${i}" type="text" placeholder="e.g. Mouse1, Q, E" autocomplete="off"
+                      oninput="showAC(this,'press',${i})" onkeydown="keyInputDown(event,'press',${i})" />
+                    <div class="ac-list" id="press-ac-${i}" style="display:none"></div>
+                  </div>
+                  <button class="btn-add-key" onclick="addKey('press',${i})">+ Add</button>
+                </div>
+              </div>
+            `;
                 list.appendChild(card);
                 renderChips('hold', i);
                 renderChips('press', i);
@@ -918,10 +1154,10 @@
             const el = document.getElementById(`${type}-chips-${idx}`);
             if (!el) return;
             el.innerHTML = arr.map((k, ki) => `
-        <div class="key-chip">
-          <span>${esc(k)}</span>
-          <button onclick="removeKey('${type}',${idx},${ki})">×</button>
-        </div>`).join('');
+            <div class="key-chip">
+              <span>${esc(k)}</span>
+              <button onclick="removeKey('${type}',${idx},${ki})">×</button>
+            </div>`).join('');
         }
 
         function addStep() {
@@ -1063,6 +1299,373 @@
             selected.delayMax = mx;
         }
 
+        // ══ Pixel Trigger ═════════════════════════════════════════════════════════════
+        function defaultPixelTrigger() {
+            return {
+                x: 0, y: 0,
+                readyColor: [255, 255, 255],
+                cooldownColor: [60, 60, 60],
+                tolerance: 40,
+                reArmDelayMs: 250,
+                pollIntervalMs: 75,
+                sampleRadius: 1,
+                requireReset: false
+            };
+        }
+
+        function togglePixelTrigger(enabled) {
+            if (enabled) {
+                selected.pixelTrigger = selected.pixelTrigger || defaultPixelTrigger();
+            } else {
+                stopPixelLive();
+                selected.pixelTrigger = null;
+            }
+            renderPixelPanel();
+            renderSidebarCards();
+        }
+
+        function renderPixelPanel() {
+            const wrap = document.getElementById('pt-body-wrap');
+            if (!wrap) return;
+            const pt = selected.pixelTrigger;
+
+            if (!pt) {
+                stopPixelLive();
+                wrap.innerHTML = `<div class="pt-disabled-note">
+              Pixel trigger is <strong>off</strong> — this script loops its steps continuously
+              while toggled on (the standard behavior). Enable it to gate the steps on a screen
+              color instead, e.g. to recast a cooldown skill the instant its icon lights up again.
+            </div>`;
+                return;
+            }
+
+            wrap.innerHTML = `
+            <div class="pt-body">
+
+              <div class="pt-sub">
+                <div class="pt-sub-title">Watched Pixel</div>
+                <div class="pt-coord-row">
+                  <div class="form-group">
+                    <label>Screen X</label>
+                    <input type="number" id="pt-x" value="${pt.x}" oninput="syncPixelField('x',this.value)" />
+                  </div>
+                  <div class="form-group">
+                    <label>Screen Y</label>
+                    <input type="number" id="pt-y" value="${pt.y}" oninput="syncPixelField('y',this.value)" />
+                  </div>
+                  <button class="btn-sample" id="pt-sample-pos" onclick="samplePixelPosition()">📍 Sample at cursor</button>
+                </div>
+                <div class="pt-hint">
+                  Click <strong>Sample at cursor</strong>, then you have 3 seconds to hover your
+                  mouse over the skill icon in-game — the pixel under the cursor is captured.
+                </div>
+              </div>
+
+              <div class="pt-sub">
+                <div class="pt-sub-title">Reference Colors</div>
+                <div class="pt-color-grid">
+                  <div class="pt-color-box">
+                    <div class="pt-swatch-row">
+                      <div class="pt-swatch" id="pt-ready-swatch"></div>
+                      <div class="pt-rgb" id="pt-ready-rgb"></div>
+                    </div>
+                    <button class="btn-sample" id="pt-sample-ready" onclick="sampleColor('ready')">Capture ready color</button>
+                    <div class="pt-hint">Capture while the skill is <strong>OFF</strong> cooldown (icon bright / lit).</div>
+                  </div>
+                  <div class="pt-color-box">
+                    <div class="pt-swatch-row">
+                      <div class="pt-swatch" id="pt-cool-swatch"></div>
+                      <div class="pt-rgb" id="pt-cool-rgb"></div>
+                    </div>
+                    <button class="btn-sample" id="pt-sample-cool" onclick="sampleColor('cooldown')">Capture cooldown color</button>
+                    <div class="pt-hint">Capture while the skill is <strong>ON</strong> cooldown (icon dark / greyed).</div>
+                  </div>
+                </div>
+                <div class="pt-hint" id="pt-color-status" style="margin-top:12px"></div>
+              </div>
+
+              <div class="pt-sub">
+                <div class="pt-sub-title">Matching &amp; Timing</div>
+
+                <div class="pt-toggle-row" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+                  <label class="switch">
+                    <input type="checkbox" id="pt-require-reset" ${pt.requireReset ? 'checked' : ''}
+                      onchange="syncPixelBool('requireReset', this.checked)" />
+                    <span class="slider"></span>
+                  </label>
+                  <div>
+                    <div style="font-weight:600;font-size:13px;color:var(--text)">
+                      One-shot — require reset between fires
+                    </div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5">
+                      Fire <strong>once</strong> when the pixel becomes ready, then wait until it
+                      returns to a non-ready state before it can fire again. Use this for actions
+                      that should run exactly once per cycle (vs. continuous autocast, which
+                      re-fires the moment the pixel is ready again).
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group full">
+                    <label>Tolerance <span class="val" id="pt-tol-lbl" style="font-family:monospace;color:var(--accent2);float:right">${pt.tolerance}</span></label>
+                    <input type="range" id="pt-tol" min="0" max="150" step="5" value="${pt.tolerance}"
+                      oninput="syncPixelField('tolerance',this.value)" />
+                    <div class="pt-hint">How far the live pixel may differ from the ready color and still count as ready. Lower = stricter.</div>
+                  </div>
+                  <div class="form-group">
+                    <label>Re-arm Delay (ms)</label>
+                    <input type="number" id="pt-rearm" min="0" step="25" value="${pt.reArmDelayMs}"
+                      oninput="syncPixelField('reArmDelayMs',this.value)" />
+                    <div class="pt-hint">Pause after firing before it can fire again.</div>
+                  </div>
+                  <div class="form-group">
+                    <label>Poll Interval (ms)</label>
+                    <input type="number" id="pt-poll" min="15" step="5" value="${pt.pollIntervalMs}"
+                      oninput="syncPixelField('pollIntervalMs',this.value)" />
+                    <div class="pt-hint">How often the pixel is checked while waiting.</div>
+                  </div>
+                  <div class="form-group full">
+                    <label>Sample Area</label>
+                    <select id="pt-radius" onchange="syncPixelField('sampleRadius',this.value)">
+                      <option value="0">Single pixel</option>
+                      <option value="1">3 × 3 average</option>
+                      <option value="2">5 × 5 average</option>
+                      <option value="3">7 × 7 average</option>
+                    </select>
+                    <div class="pt-hint">Averaging a small area steadies the reading against icon-edge highlights and animation flicker.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pt-sub">
+                <div class="pt-sub-title">Live Test</div>
+                <div class="pt-live-readout">
+                  <button class="btn-sample" id="pt-live-btn" onclick="togglePixelLive()">▶ Start live readout</button>
+                  <div class="pt-swatch" id="pt-live-swatch" style="width:32px;height:32px"></div>
+                  <div class="pt-rgb" id="pt-live-rgb"><span class="muted">— not running —</span></div>
+                  <div style="flex:1"></div>
+                  <div class="pt-verdict offline" id="pt-verdict">IDLE</div>
+                </div>
+                <div class="pt-hint">
+                  Polls the watched pixel live and shows whether the engine would fire right now —
+                  tune tolerance until READY / WAITING track the skill's real state.
+                </div>
+              </div>
+
+            </div>`;
+
+            // Populate the dynamic bits that can't be inlined above
+            document.getElementById('pt-radius').value = String(pt.sampleRadius);
+            updatePixelSwatches();
+            updateColorStatus();
+        }
+
+        function syncPixelField(field, value) {
+            const pt = selected.pixelTrigger;
+            if (!pt) return;
+            const n = parseInt(value, 10);
+            pt[field] = isNaN(n) ? 0 : n;
+            if (field === 'tolerance') {
+                const lbl = document.getElementById('pt-tol-lbl');
+                if (lbl) lbl.textContent = pt.tolerance;
+            }
+        }
+
+        function syncPixelBool(field, value) {
+            const pt = selected.pixelTrigger;
+            if (!pt) return;
+            pt[field] = !!value;
+        }
+
+        function updatePixelSwatches() {
+            const pt = selected.pixelTrigger;
+            if (!pt) return;
+            const rc = pt.readyColor, cc = pt.cooldownColor;
+            const set = (swId, rgbId, c) => {
+                const sw = document.getElementById(swId);
+                const rgb = document.getElementById(rgbId);
+                if (sw) sw.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+                if (rgb) rgb.innerHTML = `R ${c[0]}<br>G ${c[1]}<br>B ${c[2]}`;
+            };
+            set('pt-ready-swatch', 'pt-ready-rgb', rc);
+            set('pt-cool-swatch', 'pt-cool-rgb', cc);
+        }
+
+        function updateColorStatus() {
+            const el = document.getElementById('pt-color-status');
+            if (!el) return;
+            const pt = selected.pixelTrigger;
+            const d = colorDistance(pt.readyColor, pt.cooldownColor);
+            if (d < 25) {
+                el.innerHTML = `⚠ Ready and cooldown colors are nearly identical (separation ${d.toFixed(0)}). ` +
+                    `The trigger will be unreliable — pick a pixel where the icon changes more dramatically between states.`;
+                el.style.color = 'var(--red)';
+            } else {
+                el.innerHTML = `Color separation: <strong>${d.toFixed(0)}</strong>. ` +
+                    `Any tolerance below this cleanly distinguishes the two states — try around ${Math.round(d / 2)}.`;
+                el.style.color = 'var(--muted)';
+            }
+        }
+
+        function colorDistance(a, b) {
+            const dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2];
+            return Math.sqrt(dr * dr + dg * dg + db * db);
+        }
+
+        // ── Sampling (countdown → capture) ────────────────────────────────────────────
+        function countdownButton(btn, baseLabel, secs, action) {
+            if (!btn || sampleBusy) return;
+            sampleBusy = true;
+            setSampleButtonsDisabled(true);
+            btn.disabled = false;
+            btn.classList.add('counting');
+            let remaining = secs;
+            btn.textContent = `Capturing in ${remaining}…`;
+            const iv = setInterval(async () => {
+                remaining--;
+                if (remaining > 0) {
+                    btn.textContent = `Capturing in ${remaining}…`;
+                    return;
+                }
+                clearInterval(iv);
+                btn.textContent = 'Capturing…';
+                try { await action(); }
+                finally {
+                    btn.classList.remove('counting');
+                    btn.textContent = baseLabel;
+                    sampleBusy = false;
+                    setSampleButtonsDisabled(false);
+                }
+            }, 1000);
+        }
+
+        function setSampleButtonsDisabled(disabled) {
+            ['pt-sample-pos', 'pt-sample-ready', 'pt-sample-cool'].forEach(id => {
+                const b = document.getElementById(id);
+                if (b && !b.classList.contains('counting')) b.disabled = disabled;
+            });
+        }
+
+        function samplePixelPosition() {
+            const btn = document.getElementById('pt-sample-pos');
+            countdownButton(btn, '📍 Sample at cursor', 3, async () => {
+                const pt = selected.pixelTrigger;
+                if (!pt) return;
+                try {
+                    const r = await fetch(`${API}/screen/cursor?radius=${pt.sampleRadius}`);
+                    if (!r.ok) { toast('Could not read cursor position', 'error'); return; }
+                    const d = await r.json();
+                    pt.x = d.x; pt.y = d.y;
+                    const xEl = document.getElementById('pt-x');
+                    const yEl = document.getElementById('pt-y');
+                    if (xEl) xEl.value = d.x;
+                    if (yEl) yEl.value = d.y;
+                    if (d.readable) {
+                        toast(`Pixel set to (${d.x}, ${d.y})`, 'success');
+                    } else {
+                        toast(`Position (${d.x}, ${d.y}) set, but the screen is unreadable there — fullscreen-exclusive game?`, 'error');
+                    }
+                } catch (e) {
+                    toast('Network error: ' + e.message, 'error');
+                }
+            });
+        }
+
+        function sampleColor(which) {
+            const pt = selected.pixelTrigger;
+            if (!pt) return;
+            const btnId = which === 'ready' ? 'pt-sample-ready' : 'pt-sample-cool';
+            const baseLabel = which === 'ready' ? 'Capture ready color' : 'Capture cooldown color';
+            const btn = document.getElementById(btnId);
+            countdownButton(btn, baseLabel, 3, async () => {
+                try {
+                    const r = await fetch(`${API}/screen/color?x=${pt.x}&y=${pt.y}&radius=${pt.sampleRadius}`);
+                    if (!r.ok) {
+                        toast('Screen unreadable at that pixel — is the game fullscreen-exclusive?', 'error');
+                        return;
+                    }
+                    const d = await r.json();
+                    const col = [d.r, d.g, d.b];
+                    if (which === 'ready') pt.readyColor = col;
+                    else pt.cooldownColor = col;
+                    updatePixelSwatches();
+                    updateColorStatus();
+                    toast(`${which === 'ready' ? 'Ready' : 'Cooldown'} color captured — rgb(${d.r}, ${d.g}, ${d.b})`, 'success');
+                } catch (e) {
+                    toast('Network error: ' + e.message, 'error');
+                }
+            });
+        }
+
+        // ── Live readout ──────────────────────────────────────────────────────────────
+        function togglePixelLive() {
+            if (pixelLiveTimer) stopPixelLive();
+            else startPixelLive();
+        }
+
+        function startPixelLive() {
+            const btn = document.getElementById('pt-live-btn');
+            if (!btn) return;
+            btn.textContent = '■ Stop live readout';
+
+            const tick = async () => {
+                const pt = selected && selected.pixelTrigger;
+                if (!pt) { stopPixelLive(); return; }
+                try {
+                    const r = await fetch(`${API}/screen/color?x=${pt.x}&y=${pt.y}&radius=${pt.sampleRadius}`);
+                    if (!r.ok) { setLiveVerdict('offline', 'UNREADABLE', null); return; }
+                    const d = await r.json();
+                    const col = [d.r, d.g, d.b];
+                    const dReady = colorDistance(col, pt.readyColor);
+                    const dCool = colorDistance(col, pt.cooldownColor);
+                    let verdict, cls;
+                    if (dReady <= pt.tolerance && dReady < dCool) {
+                        verdict = pt.requireReset
+                            ? 'READY → fires on first match'
+                            : 'READY → would fire';
+                        cls = 'ready';
+                    } else if (dCool < dReady) {
+                        verdict = 'WAITING (cooldown)'; cls = 'waiting';
+                    } else {
+                        verdict = 'NO MATCH'; cls = 'nomatch';
+                    }
+                    setLiveVerdict(cls, verdict, col);
+                } catch {
+                    setLiveVerdict('offline', 'API OFFLINE', null);
+                }
+            };
+
+            tick();
+            pixelLiveTimer = setInterval(tick, 400);
+        }
+
+        function stopPixelLive() {
+            if (pixelLiveTimer) { clearInterval(pixelLiveTimer); pixelLiveTimer = null; }
+            const btn = document.getElementById('pt-live-btn');
+            if (btn) btn.textContent = '▶ Start live readout';
+            const rgb = document.getElementById('pt-live-rgb');
+            const sw = document.getElementById('pt-live-swatch');
+            const v = document.getElementById('pt-verdict');
+            if (rgb) rgb.innerHTML = '<span class="muted">— not running —</span>';
+            if (sw) sw.style.background = 'var(--bg0)';
+            if (v) { v.className = 'pt-verdict offline'; v.textContent = 'IDLE'; }
+        }
+
+        function setLiveVerdict(cls, text, col) {
+            const rgb = document.getElementById('pt-live-rgb');
+            const sw = document.getElementById('pt-live-swatch');
+            const v = document.getElementById('pt-verdict');
+            if (v) { v.className = 'pt-verdict ' + cls; v.textContent = text; }
+            if (col) {
+                if (sw) sw.style.background = `rgb(${col[0]},${col[1]},${col[2]})`;
+                if (rgb) rgb.innerHTML = `R ${col[0]} &nbsp; G ${col[1]} &nbsp; B ${col[2]}`;
+            } else {
+                if (sw) sw.style.background = 'var(--bg0)';
+                if (rgb) rgb.innerHTML = '<span class="muted">—</span>';
+            }
+        }
+
         // ── Save / Delete ──────────────────────────────────────────────────────────────
         async function saveScript() {
             selected.name = document.getElementById('f-name').value.trim();
@@ -1076,7 +1679,8 @@
                 triggerKey: selected.triggerKey,
                 steps: selected.steps,
                 delayMin: selected.delayMin,
-                delayMax: selected.delayMax
+                delayMax: selected.delayMax,
+                pixelTrigger: selected.pixelTrigger || null
             };
 
             try {
@@ -1159,6 +1763,355 @@
             if (!e.target.closest('.key-input-wrap'))
                 document.querySelectorAll('.ac-list').forEach(el => el.style.display = 'none');
         });
+    </script>
+
+    <!-- BIS_OVERLAY_PANEL_MARKER -->
+    <style>
+        /* Overlay-settings modal — themed off index.html CSS variables. */
+        #bis-ov-trigger {
+            background: var(--bg3);
+            color: var(--text);
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            margin-right: 8px;
+        }
+
+            #bis-ov-trigger:hover {
+                color: var(--accent);
+            }
+
+        #bis-ov-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+            #bis-ov-backdrop.open {
+                display: flex;
+            }
+
+        #bis-ov-dialog {
+            width: 440px;
+            max-width: calc(100vw - 32px);
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: var(--font);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+            overflow: hidden;
+        }
+
+            #bis-ov-dialog header {
+                display: flex;
+                align-items: center;
+                padding: 14px 18px;
+                border-bottom: 1px solid var(--border);
+                background: var(--bg1);
+            }
+
+                #bis-ov-dialog header h2 {
+                    font-size: 13px;
+                    font-weight: 700;
+                    letter-spacing: .08em;
+                    text-transform: uppercase;
+                    color: var(--accent);
+                    flex: 1;
+                    margin: 0;
+                }
+
+        #bis-ov-close {
+            background: transparent;
+            color: var(--muted);
+            font-size: 18px;
+            line-height: 1;
+            padding: 2px 8px;
+            border: none;
+        }
+
+            #bis-ov-close:hover {
+                color: var(--text);
+            }
+
+        #bis-ov-body {
+            padding: 16px 18px 8px;
+        }
+
+            #bis-ov-body .row {
+                display: grid;
+                grid-template-columns: 110px 1fr;
+                gap: 10px 14px;
+                align-items: center;
+                margin-bottom: 10px;
+            }
+
+            #bis-ov-body label {
+                margin: 0;
+                color: var(--muted);
+                font-size: 11px;
+            }
+
+            #bis-ov-body select,
+            #bis-ov-body input[type=number] {
+                background: var(--bg3);
+                border: 1px solid var(--border);
+                color: var(--text);
+                border-radius: var(--radius);
+                padding: 6px 8px;
+                font-size: 13px;
+                width: 100%;
+                font-family: var(--font);
+            }
+
+                #bis-ov-body select:focus,
+                #bis-ov-body input:focus {
+                    outline: none;
+                    border-color: var(--accent);
+                }
+
+        .bis-ov-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+            .bis-ov-check input {
+                accent-color: var(--accent);
+            }
+
+        #bis-ov-anchors {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+        }
+
+            #bis-ov-anchors button {
+                aspect-ratio: 2 / 1;
+                background: var(--bg3);
+                border: 1px solid var(--border);
+                border-radius: 5px;
+                padding: 0;
+                cursor: pointer;
+                transition: background .12s, border-color .12s;
+            }
+
+                #bis-ov-anchors button:hover {
+                    background: var(--bg1);
+                }
+
+                #bis-ov-anchors button.active {
+                    background: var(--accent);
+                    border-color: var(--accent2);
+                }
+
+        #bis-ov-dialog footer {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            border-top: 1px solid var(--border);
+            background: var(--bg1);
+        }
+
+        #bis-ov-save {
+            background: var(--accent);
+            color: #1a1a25;
+            padding: 7px 16px;
+            border: none;
+            font-weight: 600;
+        }
+
+        #bis-ov-saved {
+            color: var(--green);
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity .18s;
+        }
+
+            #bis-ov-saved.show {
+                opacity: 1;
+            }
+    </style>
+
+    <div id="bis-ov-backdrop" role="dialog" aria-modal="true" aria-labelledby="bis-ov-title">
+        <div id="bis-ov-dialog">
+            <header>
+                <h2 id="bis-ov-title">Overlay Settings</h2>
+                <button id="bis-ov-close" type="button" aria-label="Close">✕</button>
+            </header>
+
+            <div id="bis-ov-body">
+                <label class="bis-ov-check">
+                    <input type="checkbox" id="bis-ov-enabled">
+                    <span>Show on-screen overlay</span>
+                </label>
+                <label class="bis-ov-check">
+                    <input type="checkbox" id="bis-ov-hideidle">
+                    <span>Hide when no script is running</span>
+                </label>
+
+                <div class="row">
+                    <label for="bis-ov-screen">Display</label>
+                    <select id="bis-ov-screen"></select>
+                </div>
+
+                <div class="row">
+                    <label>Placement</label>
+                    <div id="bis-ov-anchors">
+                        <button type="button" data-a="TopLeft" title="Top left"></button>
+                        <button type="button" data-a="TopCenter" title="Top center"></button>
+                        <button type="button" data-a="TopRight" title="Top right"></button>
+                        <button type="button" data-a="MiddleLeft" title="Middle left"></button>
+                        <button type="button" data-a="MiddleCenter" title="Center"></button>
+                        <button type="button" data-a="MiddleRight" title="Middle right"></button>
+                        <button type="button" data-a="BottomLeft" title="Bottom left"></button>
+                        <button type="button" data-a="BottomCenter" title="Bottom center"></button>
+                        <button type="button" data-a="BottomRight" title="Bottom right"></button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <label for="bis-ov-margin">Margin</label>
+                    <input type="number" id="bis-ov-margin" min="0" max="400" step="2">
+                </div>
+                <div class="row">
+                    <label for="bis-ov-opacity">Opacity</label>
+                    <input type="number" id="bis-ov-opacity" min="0.1" max="1" step="0.05">
+                </div>
+                <div class="row">
+                    <label for="bis-ov-fontsize">Font size</label>
+                    <input type="number" id="bis-ov-fontsize" min="8" max="32" step="1">
+                </div>
+            </div>
+
+            <footer>
+                <button id="bis-ov-save" type="button">Save</button>
+                <span id="bis-ov-saved">Saved</span>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const $ = id => document.getElementById(id);
+
+            // 1. Inject the trigger button into the existing header, just before "Stop All".
+            const stopBtn = $('btn-stop-all');
+            if (stopBtn && !$('bis-ov-trigger')) {
+                const btn = document.createElement('button');
+                btn.id = 'bis-ov-trigger';
+                btn.type = 'button';
+                btn.textContent = '⚙ Overlay';
+                stopBtn.parentNode.insertBefore(btn, stopBtn);
+            }
+
+            const els = {
+                trigger: $('bis-ov-trigger'),
+                backdrop: $('bis-ov-backdrop'),
+                close: $('bis-ov-close'),
+                enabled: $('bis-ov-enabled'),
+                hideIdle: $('bis-ov-hideidle'),
+                screen: $('bis-ov-screen'),
+                anchors: $('bis-ov-anchors'),
+                margin: $('bis-ov-margin'),
+                opacity: $('bis-ov-opacity'),
+                fontSize: $('bis-ov-fontsize'),
+                save: $('bis-ov-save'),
+                saved: $('bis-ov-saved')
+            };
+            let current = null;
+
+            function paintAnchor(value) {
+                els.anchors.querySelectorAll('button').forEach(b => {
+                    b.classList.toggle('active', b.dataset.a === value);
+                });
+            }
+
+            function open() {
+                loadScreens().then(loadSettings).then(() => {
+                    els.backdrop.classList.add('open');
+                });
+            }
+            function close() { els.backdrop.classList.remove('open'); }
+
+            els.trigger && els.trigger.addEventListener('click', open);
+            els.close.addEventListener('click', close);
+            els.backdrop.addEventListener('click', e => {
+                if (e.target === els.backdrop) close();
+            });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && els.backdrop.classList.contains('open')) close();
+            });
+
+            els.anchors.addEventListener('click', e => {
+                const btn = e.target.closest('button[data-a]');
+                if (!btn || !current) return;
+                current.anchor = btn.dataset.a;
+                paintAnchor(current.anchor);
+            });
+
+            async function loadScreens() {
+                try {
+                    const r = await fetch('/api/overlay/screens');
+                    const list = await r.json();
+                    els.screen.innerHTML = '';
+                    const primary = document.createElement('option');
+                    primary.value = -1;
+                    primary.textContent = 'Primary (auto)';
+                    els.screen.appendChild(primary);
+                    list.forEach(s => {
+                        const o = document.createElement('option');
+                        o.value = s.index;
+                        o.textContent =
+                            '#' + (s.index + 1) + ' ' + s.name + ' (' + s.width + '×' + s.height + ')' +
+                            (s.isPrimary ? ' — primary' : '');
+                        els.screen.appendChild(o);
+                    });
+                } catch (_) { /* leave dropdown as-is */ }
+            }
+
+            async function loadSettings() {
+                const r = await fetch('/api/overlay/settings');
+                current = await r.json();
+                els.enabled.checked = !!current.enabled;
+                els.hideIdle.checked = !!current.hideWhenIdle;
+                els.screen.value = current.screenIndex != null ? current.screenIndex : -1;
+                els.margin.value = current.margin != null ? current.margin : 12;
+                els.opacity.value = current.opacity != null ? current.opacity : 0.80;
+                els.fontSize.value = current.fontSize != null ? current.fontSize : 12;
+                paintAnchor(current.anchor || 'TopRight');
+            }
+
+            els.save.addEventListener('click', async () => {
+                if (!current) return;
+                const payload = {
+                    enabled: els.enabled.checked,
+                    hideWhenIdle: els.hideIdle.checked,
+                    screenIndex: parseInt(els.screen.value, 10),
+                    anchor: current.anchor || 'TopRight',
+                    margin: parseFloat(els.margin.value),
+                    opacity: parseFloat(els.opacity.value),
+                    fontSize: parseFloat(els.fontSize.value)
+                };
+                const r = await fetch('/api/overlay/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (r.ok) {
+                    current = await r.json();
+                    els.saved.classList.add('show');
+                    setTimeout(() => els.saved.classList.remove('show'), 1300);
+                }
+            });
+        })();
     </script>
 </body>
 </html>
