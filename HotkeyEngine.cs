@@ -263,8 +263,11 @@ namespace BestInScript.API.Services
 
         private async Task RunScriptAsync(ScriptEntry entry, CancellationToken ct)
         {
-            var rng    = Random.Shared;
+            var rng = Random.Shared;
             var config = entry.Config;
+
+            // Keys currently held down — persists across steps AND loop iterations.
+            var heldKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             try
             {
@@ -274,17 +277,25 @@ namespace BestInScript.API.Services
                     {
                         if (ct.IsCancellationRequested) break;
 
-                        // 1. Hold keys down
-                        foreach (var key in step.Hold)
-                            _inputSim.KeyDown(key);
+                        // 1. Release only keys held previously that this step no longer needs
+                        foreach (var key in heldKeys
+                                     .Where(k => !step.Hold.Contains(k, StringComparer.OrdinalIgnoreCase))
+                                     .ToList())
+                        {
+                            _inputSim.KeyUp(key);
+                            heldKeys.Remove(key);
+                        }
 
-                        // 2. Tap each press key
+                        // 2. Press hold keys not already down; keys still held just stay down
+                        foreach (var key in step.Hold)
+                        {
+                            if (heldKeys.Add(key))
+                                _inputSim.KeyDown(key);
+                        }
+
+                        // 3. Tap each press key
                         foreach (var key in step.Press)
                             _inputSim.KeyPress(key);
-
-                        // 3. Release held keys
-                        foreach (var key in step.Hold)
-                            _inputSim.KeyUp(key);
 
                         // 4. Random delay in [DelayMin, DelayMax]
                         var delay = config.DelayMin
@@ -304,10 +315,10 @@ namespace BestInScript.API.Services
             }
             finally
             {
-                // Safety: release all keys the script may have held
-                foreach (var step in config.Steps)
-                    foreach (var key in step.Hold)
-                        _inputSim.KeyUp(key);
+                // Safety: release every key still held
+                foreach (var key in heldKeys)
+                    _inputSim.KeyUp(key);
+                heldKeys.Clear();
 
                 entry.Cts = null;
             }
