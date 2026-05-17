@@ -1,17 +1,27 @@
 using System.IO;
 using System.Text.Json;
+using BestInScript.API.Services;
 
 namespace BestInScript.API.Overlay
 {
     /// <summary>
-    /// Loads / saves <see cref="OverlaySettings"/> to a JSON file beside the
-    /// application's other data (same folder strategy as ScriptRepository).
+    /// Loads / saves <see cref="OverlaySettings"/> to a JSON file.
+    ///
+    /// File location resolution (highest to lowest precedence):
+    ///   1. BestInScript:OverlaySettingsPath if set AND absolute.
+    ///   2. BestInScript:DataDirectory + (OverlaySettingsPath or "overlay-settings.json").
+    ///   3. AppContext.BaseDirectory + (OverlaySettingsPath or "overlay-settings.json").
+    ///
+    /// Mirrors <see cref="ScriptRepository"/> so both files land in the same
+    /// directory unless one is explicitly overridden.
     ///
     /// Raises <see cref="Changed"/> whenever Save() is called so the live
     /// overlay window can reposition itself without a restart.
     /// </summary>
     public sealed class OverlaySettingsStore
     {
+        private const string DefaultFileName = "overlay-settings.json";
+
         private readonly string _path;
         private readonly ILogger<OverlaySettingsStore> _logger;
         private readonly object _lock = new();
@@ -24,10 +34,10 @@ namespace BestInScript.API.Overlay
             ILogger<OverlaySettingsStore> logger)
         {
             _logger = logger;
-            var configured = config["BestInScript:OverlaySettingsPath"];
-            _path = !string.IsNullOrWhiteSpace(configured)
-                ? Path.GetFullPath(configured)
-                : Path.Combine(AppContext.BaseDirectory, "overlay-settings.json");
+            _path = ScriptRepository.ResolveDataFilePath(
+                config, "BestInScript:OverlaySettingsPath", DefaultFileName);
+            EnsureDirectory(_path);
+            _logger.LogInformation("Overlay settings file: {Path}", _path);
 
             _current = Load();
         }
@@ -52,6 +62,7 @@ namespace BestInScript.API.Overlay
                 snapshot = Clone(_current);
                 try
                 {
+                    EnsureDirectory(_path);
                     var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions
                     {
                         WriteIndented = true
@@ -87,6 +98,22 @@ namespace BestInScript.API.Overlay
                 _logger.LogWarning(ex, "Could not load overlay-settings.json; using defaults");
             }
             return new OverlaySettings();
+        }
+
+        private void EnsureDirectory(string filePath)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Could not create overlay-settings directory for '{Path}'. Saves may fail.",
+                    filePath);
+            }
         }
 
         private static OverlaySettings Clone(OverlaySettings s) => new()

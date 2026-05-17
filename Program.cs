@@ -1,3 +1,4 @@
+using BestInScript.API.Overlay;
 using BestInScript.API.Services;
 using Microsoft.OpenApi.Models;
 
@@ -20,6 +21,13 @@ builder.Services.AddSingleton<InputSimulatorService>();
 builder.Services.AddSingleton<ScreenColorService>();
 builder.Services.AddSingleton<HotkeyEngine>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
+
+// ── On-screen overlay ──────────────────────────────────────────────────────
+// OverlaySettingsStore: holds + persists the settings (read/written by OverlayController).
+// OverlayHostedService: spins up the WPF window on a dedicated STA thread.
+// Both are required — without the hosted service no overlay is created on screen.
+builder.Services.AddSingleton<OverlaySettingsStore>();
+builder.Services.AddHostedService<OverlayHostedService>();
 
 var app = builder.Build();
 

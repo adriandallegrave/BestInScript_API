@@ -36,5 +36,17 @@ namespace BestInScript.API.Models
         /// comes off cooldown. See <see cref="PixelTrigger"/>.
         /// </summary>
         public PixelTrigger? PixelTrigger { get; set; }
+
+        /// <summary>
+        /// Surface this script in the on-screen overlay. When false (the
+        /// default) the script never appears in the overlay regardless of
+        /// whether it is toggled on. When true:
+        ///   • Pixel-triggered scripts display their live state (READY,
+        ///     waiting, unreadable) while toggled on — informational style.
+        ///   • Blind-loop scripts display as ON while toggled on.
+        /// In both cases the script disappears from the overlay when toggled
+        /// off, so the overlay only shows what is actually active.
+        /// </summary>
+        public bool ShowInOverlay { get; set; } = false;
     }
 }

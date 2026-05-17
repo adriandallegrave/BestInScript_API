@@ -12,6 +12,12 @@
         UseLayoutRounding="True"
         Title="BestInScript Overlay">
 
+    <!--
+        One outer card. The inner StackPanel is populated by OverlayWindow.xaml.cs,
+        one row per visible script. Rows are added/removed as scripts toggle on/off
+        and as pixel state changes. SizeToContent on the window means the card grows
+        and shrinks to fit.
+    -->
     <Border x:Name="CardBorder"
             CornerRadius="6"
             Background="#1A1A1A"
@@ -19,19 +25,6 @@
             BorderThickness="1"
             Padding="10,6"
             Opacity="0.80">
-        <StackPanel Orientation="Horizontal">
-            <Ellipse x:Name="StatusDot"
-                     Width="9" Height="9"
-                     Margin="0,1,8,0"
-                     VerticalAlignment="Center"
-                     Fill="#888888"/>
-            <TextBlock x:Name="StatusLabel"
-                       Text="BestInScript · idle"
-                       Foreground="White"
-                       FontFamily="Segoe UI"
-                       FontSize="12"
-                       FontWeight="SemiBold"
-                       VerticalAlignment="Center"/>
-        </StackPanel>
+        <StackPanel x:Name="RowsPanel" Orientation="Vertical"/>
     </Border>
 </Window>

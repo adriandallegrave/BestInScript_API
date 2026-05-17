@@ -1,26 +1,40 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using BestInScript.API.Services;
 
-// WinForms is pulled in globally (UseWindowsForms=true) for the Screen API,
-// so we must disambiguate WPF media types from System.Drawing.
-using Brush = System.Windows.Media.Brush;
-using SolidColorBrush = System.Windows.Media.SolidColorBrush;
-using Color = System.Windows.Media.Color;
+// Disambiguation. UseWindowsForms=true implicitly imports System.Drawing and
+// System.Windows.Forms, both of which collide with WPF on these type names.
+// Aliasing each one to the WPF (Media / Controls) version makes the
+// short names in this file refer to WPF without per-usage qualification.
 using WinFormsScreen = System.Windows.Forms.Screen;
+using Brush = System.Windows.Media.Brush;
+using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
+using FontFamily = System.Windows.Media.FontFamily;
+using Orientation = System.Windows.Controls.Orientation;
 
 namespace BestInScript.API.Overlay
 {
     /// <summary>
-    /// Tiny always-on-top, click-through status pill that shows which script
-    /// is currently running. Driven in-process by polling
-    /// <see cref="HotkeyEngine.GetStatus"/>.
+    /// Tiny always-on-top, click-through status panel that shows one row per
+    /// script the user has marked "ShowInOverlay". Driven in-process by polling
+    /// <see cref="HotkeyEngine.GetStatus"/> every 200 ms.
+    ///
+    /// Row contents:
+    ///   • Blind-loop script (no PixelTrigger): green dot + "Name · ON".
+    ///   • Pixel-triggered script: dot + state ("READY", "waiting", "unreadable").
+    ///
+    /// When no script is eligible to display, falls back to the legacy "idle"
+    /// row, or hides entirely if <see cref="OverlaySettings.HideWhenIdle"/>.
     /// </summary>
     public partial class OverlayWindow : Window
     {
-        // ── Win32 ──────────────────────────────────────────────────────────
+        // ── Win32 (click-through, no-activate) ─────────────────────────────
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TRANSPARENT = 0x00000020;
         private const int WS_EX_LAYERED = 0x00080000;
@@ -37,18 +51,28 @@ namespace BestInScript.API.Overlay
         private readonly DispatcherTimer _pollTimer;
         private OverlaySettings _settings;
 
-        // Cached brushes
-        private static readonly Brush ActiveDot = new SolidColorBrush(Color.FromRgb(0x3D, 0xDC, 0x84));
-        private static readonly Brush IdleDot = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77));
+        // Cached, frozen brushes for the status dots.
+        private static readonly Brush ActiveDot = Freeze(Color.FromRgb(0x3D, 0xDC, 0x84)); // green – running / READY
+        private static readonly Brush WaitingDot = Freeze(Color.FromRgb(0xFF, 0xAA, 0x55)); // orange – watching / waiting
+        private static readonly Brush ErrorDot = Freeze(Color.FromRgb(0xE8, 0x52, 0x52)); // red    – screen unreadable
+        private static readonly Brush IdleDot = Freeze(Color.FromRgb(0x77, 0x77, 0x77)); // grey   – idle fallback
 
+        private static Brush Freeze(Color c)
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
+
+        // Used to skip rebuilding the row list when nothing visible changed.
+        private string _lastSignature = "";
+
+        // ── Construction ───────────────────────────────────────────────────
         public OverlayWindow(HotkeyEngine engine, OverlaySettings initialSettings)
         {
             InitializeComponent();
             _engine = engine;
             _settings = initialSettings;
-
-            ActiveDot.Freeze();
-            IdleDot.Freeze();
 
             Loaded += OnLoaded;
             SizeChanged += (_, __) => ApplyPosition(_settings);
@@ -81,13 +105,16 @@ namespace BestInScript.API.Overlay
 
         // ── Public API used by the hosted service ──────────────────────────
 
-        /// <summary>Apply a fresh settings snapshot (visibility, style, position).</summary>
+        /// <summary>Apply a fresh settings snapshot (visibility, opacity, font size, position).</summary>
         public void ApplySettings(OverlaySettings s)
         {
             _settings = s;
-
             CardBorder.Opacity = s.Opacity;
-            StatusLabel.FontSize = s.FontSize;
+
+            // Force a rebuild so the new font size lands on the row TextBlocks
+            // (we build them in code, no XAML binding).
+            _lastSignature = "";
+            Refresh();
 
             if (s.Enabled)
             {
@@ -104,10 +131,10 @@ namespace BestInScript.API.Overlay
 
         private void Refresh()
         {
-            ScriptStatus? active = null;
+            List<ScriptStatus> statuses;
             try
             {
-                active = _engine.GetStatus().FirstOrDefault(x => x.IsRunning);
+                statuses = _engine.GetStatus().ToList();
             }
             catch
             {
@@ -115,25 +142,95 @@ namespace BestInScript.API.Overlay
                 return;
             }
 
-            if (active != null)
-            {
-                StatusDot.Fill = ActiveDot;
-                StatusLabel.Text = $"▶  {active.Name}  ·  [{active.TriggerKey}]";
-                if (_settings.Enabled && Visibility != Visibility.Visible) Show();
-            }
-            else
-            {
-                StatusDot.Fill = IdleDot;
-                StatusLabel.Text = "BestInScript · idle";
+            // Only display scripts the user has opted in via ShowInOverlay AND
+            // that are currently toggled on. Both kinds (pixel + blind) live in
+            // the same list; the display style is decided per row in BuildRow.
+            var displayable = statuses
+                .Where(s => s.IsRunning && s.ShowInOverlay)
+                .ToList();
 
+            List<(Brush Dot, string Text)> rows;
+
+            if (displayable.Count == 0)
+            {
                 if (_settings.HideWhenIdle)
                 {
                     if (Visibility == Visibility.Visible) Hide();
+                    return;
                 }
-                else if (_settings.Enabled && Visibility != Visibility.Visible)
+                rows = new() { (IdleDot, "BestInScript · idle") };
+            }
+            else
+            {
+                rows = displayable.Select(BuildRow).ToList();
+            }
+
+            ApplyRows(rows);
+
+            if (_settings.Enabled && Visibility != Visibility.Visible) Show();
+        }
+
+        /// <summary>
+        /// Decide the dot + label for one displayable script.
+        /// Pixel scripts get informational state; blind scripts get on/off.
+        /// </summary>
+        private static (Brush Dot, string Text) BuildRow(ScriptStatus s)
+        {
+            if (!s.HasPixelTrigger)
+                return (ActiveDot, $"{s.Name} · ON");
+
+            return s.PixelState switch
+            {
+                PixelOverlayState.Ready => (ActiveDot, $"{s.Name} · READY"),
+                PixelOverlayState.Waiting => (WaitingDot, $"{s.Name} · waiting"),
+                PixelOverlayState.Unreadable => (ErrorDot, $"{s.Name} · unreadable"),
+                _ => (WaitingDot, $"{s.Name} · …")
+            };
+        }
+
+        /// <summary>
+        /// Rebuild the RowsPanel children only when the visible signature has
+        /// actually changed — avoids 5/second flicker when nothing moved.
+        /// </summary>
+        private void ApplyRows(List<(Brush Dot, string Text)> rows)
+        {
+            var sig = string.Join(
+                "||",
+                rows.Select(r =>
+                    r.Dot is SolidColorBrush b
+                        ? b.Color.ToString() + "::" + r.Text
+                        : r.Text))
+                + "@@fs=" + _settings.FontSize;
+
+            if (sig == _lastSignature) return;
+            _lastSignature = sig;
+
+            RowsPanel.Children.Clear();
+            foreach (var (dot, text) in rows)
+            {
+                var rowPanel = new StackPanel
                 {
-                    Show();
-                }
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(0, 1, 0, 1)
+                };
+                rowPanel.Children.Add(new Ellipse
+                {
+                    Width = 9,
+                    Height = 9,
+                    Margin = new Thickness(0, 1, 8, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Fill = dot
+                });
+                rowPanel.Children.Add(new TextBlock
+                {
+                    Text = text,
+                    Foreground = Brushes.White,
+                    FontFamily = new FontFamily("Segoe UI"),
+                    FontSize = _settings.FontSize,
+                    FontWeight = FontWeights.SemiBold,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                RowsPanel.Children.Add(rowPanel);
             }
         }
 

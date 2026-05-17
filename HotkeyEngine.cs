@@ -190,7 +190,10 @@ namespace BestInScript.API.Services
                 Id = e.Config.Id,
                 Name = e.Config.Name,
                 TriggerKey = e.Config.TriggerKey,
-                IsRunning = e.IsRunning
+                IsRunning = e.IsRunning,
+                ShowInOverlay = e.Config.ShowInOverlay,
+                HasPixelTrigger = e.Config.PixelTrigger != null,
+                PixelState = e.PixelState
             });
 
         /// <summary>Stops all running scripts immediately.</summary>
@@ -342,6 +345,10 @@ namespace BestInScript.API.Services
             // "reset to initial state" requirement.
             bool armed = true;
 
+            // Initialize the overlay state to "waiting" so the user immediately
+            // sees the script as watching, rather than NotApplicable.
+            entry.PixelState = PixelOverlayState.Waiting;
+
             try
             {
                 while (!ct.IsCancellationRequested)
@@ -350,6 +357,8 @@ namespace BestInScript.API.Services
 
                     if (color is null)
                     {
+                        entry.PixelState = PixelOverlayState.Unreadable;
+
                         // Screen unreadable (e.g. fullscreen-exclusive game).
                         // Warn once, then back off harder than the poll interval
                         // so we don't spin on a black screen.
@@ -379,6 +388,7 @@ namespace BestInScript.API.Services
 
                     if (ready && armed)
                     {
+                        entry.PixelState = PixelOverlayState.Ready;
                         await RunStepsOnceAsync(config, heldKeys, rng, ct);
                         ReleaseHeld(heldKeys);          // each cast is a discrete burst
                         if (pt.RequireReset) armed = false;
@@ -390,6 +400,7 @@ namespace BestInScript.API.Services
                         // Any non-ready observation re-arms the trigger. (When
                         // RequireReset is false, armed is already true and this
                         // is a no-op — so the autocast path is unchanged.)
+                        entry.PixelState = PixelOverlayState.Waiting;
                         if (!ready) armed = true;
                         await Task.Delay(pollMs, ct);
                     }
@@ -481,7 +492,38 @@ namespace BestInScript.API.Services
             public ScriptConfig Config { get; } = config;
             public CancellationTokenSource? Cts { get; set; }
             public bool IsRunning => Cts != null && !Cts.IsCancellationRequested;
+
+            // Pixel verdict for the overlay. Written on the script's task
+            // thread (RunPixelGatedAsync), read on the WPF UI thread by the
+            // overlay. Int + Volatile keeps the cross-thread read cheap and
+            // visible; the worst risk is a one-tick stale value, which is
+            // harmless for a 200 ms-refreshed UI indicator.
+            private int _pixelState;
+            public PixelOverlayState PixelState
+            {
+                get => (PixelOverlayState)Volatile.Read(ref _pixelState);
+                set => Volatile.Write(ref _pixelState, (int)value);
+            }
         }
+    }
+
+    /// <summary>
+    /// Live state of a pixel-triggered script, surfaced to the on-screen overlay.
+    /// Always <see cref="NotApplicable"/> for blind-loop scripts.
+    /// </summary>
+    public enum PixelOverlayState
+    {
+        /// <summary>Script has no pixel trigger — no live state to report.</summary>
+        NotApplicable = 0,
+
+        /// <summary>Pixel matched "ready" on the most recent sample; the script is firing (or just fired in one-shot mode).</summary>
+        Ready = 1,
+
+        /// <summary>Pixel did not match "ready" — the script is watching and waiting.</summary>
+        Waiting = 2,
+
+        /// <summary>Screen could not be read at the watched coordinate (e.g. fullscreen-exclusive game).</summary>
+        Unreadable = 3
     }
 
     public class ScriptStatus
@@ -490,5 +532,14 @@ namespace BestInScript.API.Services
         public string Name { get; set; } = "";
         public string TriggerKey { get; set; } = "";
         public bool IsRunning { get; set; }
+
+        /// <summary>True if the script's config has ShowInOverlay enabled.</summary>
+        public bool ShowInOverlay { get; set; }
+
+        /// <summary>True if the script has a PixelTrigger configured (display hint for the overlay).</summary>
+        public bool HasPixelTrigger { get; set; }
+
+        /// <summary>Live pixel verdict for pixel-triggered scripts; NotApplicable otherwise.</summary>
+        public PixelOverlayState PixelState { get; set; }
     }
 }

@@ -953,15 +953,16 @@
                 const running = !!statuses[s.id];
                 const sel = selected && selected.id === s.id ? 'selected' : '';
                 const pixelTag = s.pixelTrigger ? ' · 👁 pixel' : '';
+                const overlayTag = s.showInOverlay ? ' · 📺 overlay' : '';
                 return `
-              <div class="script-card ${sel}" data-id="${s.id}" onclick="selectScript('${s.id}')">
-                <div class="key-badge">${esc(s.triggerKey)}</div>
-                <div class="info">
-                  <div class="name">${esc(s.name)}</div>
-                  <div class="meta">${s.steps.length} step${s.steps.length !== 1 ? 's' : ''} · ${s.delayMin}–${s.delayMax}s${pixelTag}</div>
-                </div>
-                ${running ? '<div class="running-pill">● ON</div>' : ''}
-              </div>`;
+          <div class="script-card ${sel}" data-id="${s.id}" onclick="selectScript('${s.id}')">
+            <div class="key-badge">${esc(s.triggerKey)}</div>
+            <div class="info">
+              <div class="name">${esc(s.name)}</div>
+              <div class="meta">${s.steps.length} step${s.steps.length !== 1 ? 's' : ''} · ${s.delayMin}–${s.delayMax}s${pixelTag}${overlayTag}</div>
+            </div>
+            ${running ? '<div class="running-pill">● ON</div>' : ''}
+          </div>`;
             }).join('');
         }
 
@@ -981,7 +982,8 @@
             selected = {
                 id: null, name: 'New Script', triggerKey: '3',
                 steps: [{ hold: [], press: [] }], delayMin: 0.4, delayMax: 0.6,
-                pixelTrigger: null
+                pixelTrigger: null,
+                showInOverlay: false
             };
             renderEditor();
         }
@@ -1009,74 +1011,94 @@
 
             // ── Basic settings panel ──
             const basic = mkPanel('Basic Settings', `
-            <div class="form-row">
-              <div class="form-group full">
-                <label>Script Name</label>
-                <input id="f-name" type="text" value="${esc(selected.name)}" placeholder="e.g. Hammerwing Rotation" />
-              </div>
+        <div class="form-row">
+          <div class="form-group full">
+            <label>Script Name</label>
+            <input id="f-name" type="text" value="${esc(selected.name)}" placeholder="e.g. Hammerwing Rotation" />
+          </div>
 
-              <div class="form-group">
-                <label>Trigger Key <span style="color:var(--muted);font-weight:400;text-transform:none">(keyboard only)</span></label>
-                <div id="trigger-capture">
-                  <div id="trigger-display">${esc(selected.triggerKey)}</div>
-                  <button id="btn-capture" onclick="startCapture()">Click to Capture</button>
-                </div>
-                <div style="font-size:11px;color:var(--muted);margin-top:5px">Press this key in-game to toggle the script on/off.</div>
-              </div>
+          <div class="form-group">
+            <label>Trigger Key <span style="color:var(--muted);font-weight:400;text-transform:none">(keyboard only)</span></label>
+            <div id="trigger-capture">
+              <div id="trigger-display">${esc(selected.triggerKey)}</div>
+              <button id="btn-capture" onclick="startCapture()">Click to Capture</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:5px">Press this key in-game to toggle the script on/off.</div>
+          </div>
 
-              <div class="form-group">
-                <label>Delay Between Steps</label>
-                <div class="delay-row">
-                  <div class="delay-group">
-                    <label style="margin-bottom:2px">Min <span class="val" id="lbl-dmin">${selected.delayMin}s</span></label>
-                    <input id="f-dmin" type="range" min="0.1" max="5" step="0.05"
-                      value="${selected.delayMin}" oninput="syncDelay()" />
-                  </div>
-                  <div class="delay-group">
-                    <label style="margin-bottom:2px">Max <span class="val" id="lbl-dmax">${selected.delayMax}s</span></label>
-                    <input id="f-dmax" type="range" min="0.1" max="5" step="0.05"
-                      value="${selected.delayMax}" oninput="syncDelay()" />
-                  </div>
-                </div>
-                <div style="font-size:11px;color:var(--muted);margin-top:5px">Each step waits a random time in this window. Randomness avoids detection.</div>
+          <div class="form-group">
+            <label>Delay Between Steps</label>
+            <div class="delay-row">
+              <div class="delay-group">
+                <label style="margin-bottom:2px">Min <span class="val" id="lbl-dmin">${selected.delayMin}s</span></label>
+                <input id="f-dmin" type="range" min="0.1" max="5" step="0.05"
+                  value="${selected.delayMin}" oninput="syncDelay()" />
+              </div>
+              <div class="delay-group">
+                <label style="margin-bottom:2px">Max <span class="val" id="lbl-dmax">${selected.delayMax}s</span></label>
+                <input id="f-dmax" type="range" min="0.1" max="5" step="0.05"
+                  value="${selected.delayMax}" oninput="syncDelay()" />
               </div>
             </div>
-          `);
-            editor.appendChild(basic);
+            <div style="font-size:11px;color:var(--muted);margin-top:5px">Each step waits a random time in this window. Randomness avoids detection.</div>
+          </div>
 
-            // ── Pixel trigger panel ──
-            const pixelPanel = mkPanel('Pixel Trigger — Autocast', `
+          <div class="form-group full" style="margin-top:8px;padding-top:14px;border-top:1px solid var(--border)">
             <div class="pt-toggle-row">
               <label class="switch">
-                <input type="checkbox" id="pt-enable" ${selected.pixelTrigger ? 'checked' : ''}
-                  onchange="togglePixelTrigger(this.checked)" />
+                <input type="checkbox" id="f-show-overlay" ${selected.showInOverlay ? 'checked' : ''}
+                  onchange="syncShowOverlay(this.checked)" />
                 <span class="slider"></span>
               </label>
               <div>
                 <div style="font-weight:600;font-size:13px;color:var(--text)">
-                  Only run while a screen pixel matches a “ready” color
+                  Show in on-screen overlay
                 </div>
-                <div style="font-size:11px;color:var(--muted);margin-top:2px">
-                  Watches a skill icon and fires the steps the moment it comes off cooldown.
+                <div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5">
+                  Surface this script in the desktop overlay while it's toggled on.
+                  Pixel-triggered scripts show their live state (READY / waiting /
+                  unreadable); regular scripts show as ON.
                 </div>
               </div>
             </div>
-            <div id="pt-body-wrap"></div>
-          `);
+          </div>
+        </div>
+      `);
+            editor.appendChild(basic);
+
+            // ── Pixel trigger panel ──
+            const pixelPanel = mkPanel('Pixel Trigger — Autocast', `
+        <div class="pt-toggle-row">
+          <label class="switch">
+            <input type="checkbox" id="pt-enable" ${selected.pixelTrigger ? 'checked' : ''}
+              onchange="togglePixelTrigger(this.checked)" />
+            <span class="slider"></span>
+          </label>
+          <div>
+            <div style="font-weight:600;font-size:13px;color:var(--text)">
+              Only run while a screen pixel matches a “ready” color
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">
+              Watches a skill icon and fires the steps the moment it comes off cooldown.
+            </div>
+          </div>
+        </div>
+        <div id="pt-body-wrap"></div>
+      `);
             editor.appendChild(pixelPanel);
             renderPixelPanel();
 
             // ── Steps panel ──
             const stepsPanel = mkPanel('Script Steps', `
-            <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
-              Each step: hold keys are pressed down → press keys are tapped → hold keys no longer
-              needed are released → random delay. A hold key shared by consecutive steps stays
-              down instead of fluttering. Steps loop while the script is active (or run once per
-              “ready” detection when a pixel trigger is set).
-            </div>
-            <div id="steps-list"></div>
-            <button id="btn-add-step" onclick="addStep()">+ Add Step</button>
-          `);
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+          Each step: hold keys are pressed down → press keys are tapped → hold keys no longer
+          needed are released → random delay. A hold key shared by consecutive steps stays
+          down instead of fluttering. Steps loop while the script is active (or run once per
+          “ready” detection when a pixel trigger is set).
+        </div>
+        <div id="steps-list"></div>
+        <button id="btn-add-step" onclick="addStep()">+ Add Step</button>
+      `);
             editor.appendChild(stepsPanel);
 
             renderSteps();
@@ -1085,10 +1107,10 @@
             const bar = document.createElement('div');
             bar.className = 'action-bar';
             bar.innerHTML = `
-            <button id="btn-delete" onclick="deleteScript()" ${isNew ? 'style="display:none"' : ''}>🗑 Delete</button>
-            <div class="spacer"></div>
-            <button id="btn-save" onclick="saveScript()">💾 Save Script</button>
-          `;
+        <button id="btn-delete" onclick="deleteScript()" ${isNew ? 'style="display:none"' : ''}>🗑 Delete</button>
+        <div class="spacer"></div>
+        <button id="btn-save" onclick="saveScript()">💾 Save Script</button>
+      `;
             editor.appendChild(bar);
 
             // Highlight selected card
@@ -1112,36 +1134,36 @@
                 card.className = 'step-card';
                 card.dataset.idx = i;
                 card.innerHTML = `
-              <div class="step-header">
-                <span class="step-number">STEP ${i + 1}</span>
-                <span></span>
-                <button class="btn-remove-step" onclick="removeStep(${i})">✕ Remove</button>
+          <div class="step-header">
+            <span class="step-number">STEP ${i + 1}</span>
+            <span></span>
+            <button class="btn-remove-step" onclick="removeStep(${i})">✕ Remove</button>
+          </div>
+          <div class="step-section">
+            <label>Hold Keys <span style="font-weight:400;text-transform:none;color:var(--muted)">(held down for entire step)</span></label>
+            <div class="key-chips" id="hold-chips-${i}"></div>
+            <div class="add-key-row">
+              <div class="key-input-wrap" style="flex:1">
+                <input id="hold-input-${i}" type="text" placeholder="e.g. Shift, Ctrl" autocomplete="off"
+                  oninput="showAC(this,'hold',${i})" onkeydown="keyInputDown(event,'hold',${i})" />
+                <div class="ac-list" id="hold-ac-${i}" style="display:none"></div>
               </div>
-              <div class="step-section">
-                <label>Hold Keys <span style="font-weight:400;text-transform:none;color:var(--muted)">(held down for entire step)</span></label>
-                <div class="key-chips" id="hold-chips-${i}"></div>
-                <div class="add-key-row">
-                  <div class="key-input-wrap" style="flex:1">
-                    <input id="hold-input-${i}" type="text" placeholder="e.g. Shift, Ctrl" autocomplete="off"
-                      oninput="showAC(this,'hold',${i})" onkeydown="keyInputDown(event,'hold',${i})" />
-                    <div class="ac-list" id="hold-ac-${i}" style="display:none"></div>
-                  </div>
-                  <button class="btn-add-key" onclick="addKey('hold',${i})">+ Add</button>
-                </div>
+              <button class="btn-add-key" onclick="addKey('hold',${i})">+ Add</button>
+            </div>
+          </div>
+          <div class="step-section" style="margin-bottom:0">
+            <label>Press Keys <span style="font-weight:400;text-transform:none;color:var(--muted)">(tap once per step)</span></label>
+            <div class="key-chips" id="press-chips-${i}"></div>
+            <div class="add-key-row">
+              <div class="key-input-wrap" style="flex:1">
+                <input id="press-input-${i}" type="text" placeholder="e.g. Mouse1, Q, E" autocomplete="off"
+                  oninput="showAC(this,'press',${i})" onkeydown="keyInputDown(event,'press',${i})" />
+                <div class="ac-list" id="press-ac-${i}" style="display:none"></div>
               </div>
-              <div class="step-section" style="margin-bottom:0">
-                <label>Press Keys <span style="font-weight:400;text-transform:none;color:var(--muted)">(tap once per step)</span></label>
-                <div class="key-chips" id="press-chips-${i}"></div>
-                <div class="add-key-row">
-                  <div class="key-input-wrap" style="flex:1">
-                    <input id="press-input-${i}" type="text" placeholder="e.g. Mouse1, Q, E" autocomplete="off"
-                      oninput="showAC(this,'press',${i})" onkeydown="keyInputDown(event,'press',${i})" />
-                    <div class="ac-list" id="press-ac-${i}" style="display:none"></div>
-                  </div>
-                  <button class="btn-add-key" onclick="addKey('press',${i})">+ Add</button>
-                </div>
-              </div>
-            `;
+              <button class="btn-add-key" onclick="addKey('press',${i})">+ Add</button>
+            </div>
+          </div>
+        `;
                 list.appendChild(card);
                 renderChips('hold', i);
                 renderChips('press', i);
@@ -1154,10 +1176,10 @@
             const el = document.getElementById(`${type}-chips-${idx}`);
             if (!el) return;
             el.innerHTML = arr.map((k, ki) => `
-            <div class="key-chip">
-              <span>${esc(k)}</span>
-              <button onclick="removeKey('${type}',${idx},${ki})">×</button>
-            </div>`).join('');
+        <div class="key-chip">
+          <span>${esc(k)}</span>
+          <button onclick="removeKey('${type}',${idx},${ki})">×</button>
+        </div>`).join('');
         }
 
         function addStep() {
@@ -1299,6 +1321,11 @@
             selected.delayMax = mx;
         }
 
+        function syncShowOverlay(value) {
+            selected.showInOverlay = !!value;
+            renderSidebarCards();   // update the small "📺 overlay" tag live
+        }
+
         // ══ Pixel Trigger ═════════════════════════════════════════════════════════════
         function defaultPixelTrigger() {
             return {
@@ -1332,128 +1359,128 @@
             if (!pt) {
                 stopPixelLive();
                 wrap.innerHTML = `<div class="pt-disabled-note">
-              Pixel trigger is <strong>off</strong> — this script loops its steps continuously
-              while toggled on (the standard behavior). Enable it to gate the steps on a screen
-              color instead, e.g. to recast a cooldown skill the instant its icon lights up again.
-            </div>`;
+          Pixel trigger is <strong>off</strong> — this script loops its steps continuously
+          while toggled on (the standard behavior). Enable it to gate the steps on a screen
+          color instead, e.g. to recast a cooldown skill the instant its icon lights up again.
+        </div>`;
                 return;
             }
 
             wrap.innerHTML = `
-            <div class="pt-body">
+        <div class="pt-body">
 
-              <div class="pt-sub">
-                <div class="pt-sub-title">Watched Pixel</div>
-                <div class="pt-coord-row">
-                  <div class="form-group">
-                    <label>Screen X</label>
-                    <input type="number" id="pt-x" value="${pt.x}" oninput="syncPixelField('x',this.value)" />
-                  </div>
-                  <div class="form-group">
-                    <label>Screen Y</label>
-                    <input type="number" id="pt-y" value="${pt.y}" oninput="syncPixelField('y',this.value)" />
-                  </div>
-                  <button class="btn-sample" id="pt-sample-pos" onclick="samplePixelPosition()">📍 Sample at cursor</button>
+          <div class="pt-sub">
+            <div class="pt-sub-title">Watched Pixel</div>
+            <div class="pt-coord-row">
+              <div class="form-group">
+                <label>Screen X</label>
+                <input type="number" id="pt-x" value="${pt.x}" oninput="syncPixelField('x',this.value)" />
+              </div>
+              <div class="form-group">
+                <label>Screen Y</label>
+                <input type="number" id="pt-y" value="${pt.y}" oninput="syncPixelField('y',this.value)" />
+              </div>
+              <button class="btn-sample" id="pt-sample-pos" onclick="samplePixelPosition()">📍 Sample at cursor</button>
+            </div>
+            <div class="pt-hint">
+              Click <strong>Sample at cursor</strong>, then you have 3 seconds to hover your
+              mouse over the skill icon in-game — the pixel under the cursor is captured.
+            </div>
+          </div>
+
+          <div class="pt-sub">
+            <div class="pt-sub-title">Reference Colors</div>
+            <div class="pt-color-grid">
+              <div class="pt-color-box">
+                <div class="pt-swatch-row">
+                  <div class="pt-swatch" id="pt-ready-swatch"></div>
+                  <div class="pt-rgb" id="pt-ready-rgb"></div>
                 </div>
-                <div class="pt-hint">
-                  Click <strong>Sample at cursor</strong>, then you have 3 seconds to hover your
-                  mouse over the skill icon in-game — the pixel under the cursor is captured.
+                <button class="btn-sample" id="pt-sample-ready" onclick="sampleColor('ready')">Capture ready color</button>
+                <div class="pt-hint">Capture while the skill is <strong>OFF</strong> cooldown (icon bright / lit).</div>
+              </div>
+              <div class="pt-color-box">
+                <div class="pt-swatch-row">
+                  <div class="pt-swatch" id="pt-cool-swatch"></div>
+                  <div class="pt-rgb" id="pt-cool-rgb"></div>
+                </div>
+                <button class="btn-sample" id="pt-sample-cool" onclick="sampleColor('cooldown')">Capture cooldown color</button>
+                <div class="pt-hint">Capture while the skill is <strong>ON</strong> cooldown (icon dark / greyed).</div>
+              </div>
+            </div>
+            <div class="pt-hint" id="pt-color-status" style="margin-top:12px"></div>
+          </div>
+
+          <div class="pt-sub">
+            <div class="pt-sub-title">Matching &amp; Timing</div>
+
+            <div class="pt-toggle-row" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+              <label class="switch">
+                <input type="checkbox" id="pt-require-reset" ${pt.requireReset ? 'checked' : ''}
+                  onchange="syncPixelBool('requireReset', this.checked)" />
+                <span class="slider"></span>
+              </label>
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--text)">
+                  One-shot — require reset between fires
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5">
+                  Fire <strong>once</strong> when the pixel becomes ready, then wait until it
+                  returns to a non-ready state before it can fire again. Use this for actions
+                  that should run exactly once per cycle (vs. continuous autocast, which
+                  re-fires the moment the pixel is ready again).
                 </div>
               </div>
+            </div>
 
-              <div class="pt-sub">
-                <div class="pt-sub-title">Reference Colors</div>
-                <div class="pt-color-grid">
-                  <div class="pt-color-box">
-                    <div class="pt-swatch-row">
-                      <div class="pt-swatch" id="pt-ready-swatch"></div>
-                      <div class="pt-rgb" id="pt-ready-rgb"></div>
-                    </div>
-                    <button class="btn-sample" id="pt-sample-ready" onclick="sampleColor('ready')">Capture ready color</button>
-                    <div class="pt-hint">Capture while the skill is <strong>OFF</strong> cooldown (icon bright / lit).</div>
-                  </div>
-                  <div class="pt-color-box">
-                    <div class="pt-swatch-row">
-                      <div class="pt-swatch" id="pt-cool-swatch"></div>
-                      <div class="pt-rgb" id="pt-cool-rgb"></div>
-                    </div>
-                    <button class="btn-sample" id="pt-sample-cool" onclick="sampleColor('cooldown')">Capture cooldown color</button>
-                    <div class="pt-hint">Capture while the skill is <strong>ON</strong> cooldown (icon dark / greyed).</div>
-                  </div>
-                </div>
-                <div class="pt-hint" id="pt-color-status" style="margin-top:12px"></div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Tolerance <span class="val" id="pt-tol-lbl" style="font-family:monospace;color:var(--accent2);float:right">${pt.tolerance}</span></label>
+                <input type="range" id="pt-tol" min="0" max="150" step="5" value="${pt.tolerance}"
+                  oninput="syncPixelField('tolerance',this.value)" />
+                <div class="pt-hint">How far the live pixel may differ from the ready color and still count as ready. Lower = stricter.</div>
               </div>
-
-              <div class="pt-sub">
-                <div class="pt-sub-title">Matching &amp; Timing</div>
-
-                <div class="pt-toggle-row" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
-                  <label class="switch">
-                    <input type="checkbox" id="pt-require-reset" ${pt.requireReset ? 'checked' : ''}
-                      onchange="syncPixelBool('requireReset', this.checked)" />
-                    <span class="slider"></span>
-                  </label>
-                  <div>
-                    <div style="font-weight:600;font-size:13px;color:var(--text)">
-                      One-shot — require reset between fires
-                    </div>
-                    <div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5">
-                      Fire <strong>once</strong> when the pixel becomes ready, then wait until it
-                      returns to a non-ready state before it can fire again. Use this for actions
-                      that should run exactly once per cycle (vs. continuous autocast, which
-                      re-fires the moment the pixel is ready again).
-                    </div>
-                  </div>
-                </div>
-
-                <div class="form-row">
-                  <div class="form-group full">
-                    <label>Tolerance <span class="val" id="pt-tol-lbl" style="font-family:monospace;color:var(--accent2);float:right">${pt.tolerance}</span></label>
-                    <input type="range" id="pt-tol" min="0" max="150" step="5" value="${pt.tolerance}"
-                      oninput="syncPixelField('tolerance',this.value)" />
-                    <div class="pt-hint">How far the live pixel may differ from the ready color and still count as ready. Lower = stricter.</div>
-                  </div>
-                  <div class="form-group">
-                    <label>Re-arm Delay (ms)</label>
-                    <input type="number" id="pt-rearm" min="0" step="25" value="${pt.reArmDelayMs}"
-                      oninput="syncPixelField('reArmDelayMs',this.value)" />
-                    <div class="pt-hint">Pause after firing before it can fire again.</div>
-                  </div>
-                  <div class="form-group">
-                    <label>Poll Interval (ms)</label>
-                    <input type="number" id="pt-poll" min="15" step="5" value="${pt.pollIntervalMs}"
-                      oninput="syncPixelField('pollIntervalMs',this.value)" />
-                    <div class="pt-hint">How often the pixel is checked while waiting.</div>
-                  </div>
-                  <div class="form-group full">
-                    <label>Sample Area</label>
-                    <select id="pt-radius" onchange="syncPixelField('sampleRadius',this.value)">
-                      <option value="0">Single pixel</option>
-                      <option value="1">3 × 3 average</option>
-                      <option value="2">5 × 5 average</option>
-                      <option value="3">7 × 7 average</option>
-                    </select>
-                    <div class="pt-hint">Averaging a small area steadies the reading against icon-edge highlights and animation flicker.</div>
-                  </div>
-                </div>
+              <div class="form-group">
+                <label>Re-arm Delay (ms)</label>
+                <input type="number" id="pt-rearm" min="0" step="25" value="${pt.reArmDelayMs}"
+                  oninput="syncPixelField('reArmDelayMs',this.value)" />
+                <div class="pt-hint">Pause after firing before it can fire again.</div>
               </div>
-
-              <div class="pt-sub">
-                <div class="pt-sub-title">Live Test</div>
-                <div class="pt-live-readout">
-                  <button class="btn-sample" id="pt-live-btn" onclick="togglePixelLive()">▶ Start live readout</button>
-                  <div class="pt-swatch" id="pt-live-swatch" style="width:32px;height:32px"></div>
-                  <div class="pt-rgb" id="pt-live-rgb"><span class="muted">— not running —</span></div>
-                  <div style="flex:1"></div>
-                  <div class="pt-verdict offline" id="pt-verdict">IDLE</div>
-                </div>
-                <div class="pt-hint">
-                  Polls the watched pixel live and shows whether the engine would fire right now —
-                  tune tolerance until READY / WAITING track the skill's real state.
-                </div>
+              <div class="form-group">
+                <label>Poll Interval (ms)</label>
+                <input type="number" id="pt-poll" min="15" step="5" value="${pt.pollIntervalMs}"
+                  oninput="syncPixelField('pollIntervalMs',this.value)" />
+                <div class="pt-hint">How often the pixel is checked while waiting.</div>
               </div>
+              <div class="form-group full">
+                <label>Sample Area</label>
+                <select id="pt-radius" onchange="syncPixelField('sampleRadius',this.value)">
+                  <option value="0">Single pixel</option>
+                  <option value="1">3 × 3 average</option>
+                  <option value="2">5 × 5 average</option>
+                  <option value="3">7 × 7 average</option>
+                </select>
+                <div class="pt-hint">Averaging a small area steadies the reading against icon-edge highlights and animation flicker.</div>
+              </div>
+            </div>
+          </div>
 
-            </div>`;
+          <div class="pt-sub">
+            <div class="pt-sub-title">Live Test</div>
+            <div class="pt-live-readout">
+              <button class="btn-sample" id="pt-live-btn" onclick="togglePixelLive()">▶ Start live readout</button>
+              <div class="pt-swatch" id="pt-live-swatch" style="width:32px;height:32px"></div>
+              <div class="pt-rgb" id="pt-live-rgb"><span class="muted">— not running —</span></div>
+              <div style="flex:1"></div>
+              <div class="pt-verdict offline" id="pt-verdict">IDLE</div>
+            </div>
+            <div class="pt-hint">
+              Polls the watched pixel live and shows whether the engine would fire right now —
+              tune tolerance until READY / WAITING track the skill's real state.
+            </div>
+          </div>
+
+        </div>`;
 
             // Populate the dynamic bits that can't be inlined above
             document.getElementById('pt-radius').value = String(pt.sampleRadius);
@@ -1680,7 +1707,8 @@
                 steps: selected.steps,
                 delayMin: selected.delayMin,
                 delayMax: selected.delayMax,
-                pixelTrigger: selected.pixelTrigger || null
+                pixelTrigger: selected.pixelTrigger || null,
+                showInOverlay: !!selected.showInOverlay
             };
 
             try {
@@ -1938,6 +1966,27 @@
             #bis-ov-saved.show {
                 opacity: 1;
             }
+
+            #bis-ov-saved.error {
+                color: var(--red);
+            }
+
+        /* Inline error banner so the user sees API failures instead of nothing. */
+        #bis-ov-error {
+            display: none;
+            margin: 0 18px 12px;
+            padding: 8px 10px;
+            background: rgba(232, 82, 82, .12);
+            border: 1px solid rgba(232, 82, 82, .4);
+            border-radius: var(--radius);
+            color: var(--red);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+            #bis-ov-error.show {
+                display: block;
+            }
     </style>
 
     <div id="bis-ov-backdrop" role="dialog" aria-modal="true" aria-labelledby="bis-ov-title">
@@ -1946,6 +1995,8 @@
                 <h2 id="bis-ov-title">Overlay Settings</h2>
                 <button id="bis-ov-close" type="button" aria-label="Close">✕</button>
             </header>
+
+            <div id="bis-ov-error"></div>
 
             <div id="bis-ov-body">
                 <label class="bis-ov-check">
@@ -2015,7 +2066,9 @@
             const els = {
                 trigger: $('bis-ov-trigger'),
                 backdrop: $('bis-ov-backdrop'),
+                dialog: $('bis-ov-dialog'),
                 close: $('bis-ov-close'),
+                error: $('bis-ov-error'),
                 enabled: $('bis-ov-enabled'),
                 hideIdle: $('bis-ov-hideidle'),
                 screen: $('bis-ov-screen'),
@@ -2028,17 +2081,74 @@
             };
             let current = null;
 
+            // Defaults applied when /api/overlay/settings can't be reached. They
+            // mirror the OverlaySettings record so the dialog stays usable as a
+            // local-only editor and the user can SEE that the API is broken
+            // instead of silently getting nothing on click.
+            const DEFAULT_SETTINGS = Object.freeze({
+                enabled: false,
+                hideWhenIdle: false,
+                screenIndex: -1,
+                anchor: 'TopRight',
+                margin: 12,
+                opacity: 0.80,
+                fontSize: 12
+            });
+
+            function showError(msg) {
+                console.warn('[Overlay panel]', msg);
+                els.error.textContent = msg;
+                els.error.classList.add('show');
+            }
+
+            function clearError() {
+                els.error.textContent = '';
+                els.error.classList.remove('show');
+            }
+
             function paintAnchor(value) {
                 els.anchors.querySelectorAll('button').forEach(b => {
                     b.classList.toggle('active', b.dataset.a === value);
                 });
             }
 
-            function open() {
-                loadScreens().then(loadSettings).then(() => {
-                    els.backdrop.classList.add('open');
-                });
+            function applySettings(s) {
+                current = s;
+                els.enabled.checked = !!s.enabled;
+                els.hideIdle.checked = !!s.hideWhenIdle;
+                els.screen.value = s.screenIndex != null ? s.screenIndex : -1;
+                els.margin.value = s.margin != null ? s.margin : DEFAULT_SETTINGS.margin;
+                els.opacity.value = s.opacity != null ? s.opacity : DEFAULT_SETTINGS.opacity;
+                els.fontSize.value = s.fontSize != null ? s.fontSize : DEFAULT_SETTINGS.fontSize;
+                paintAnchor(s.anchor || DEFAULT_SETTINGS.anchor);
             }
+
+            async function open() {
+                // Always open the dialog, even if API calls fail — the user needs
+                // to see something happen when they click. Errors are surfaced in
+                // the inline banner above the form.
+                clearError();
+                let screensOk = true, settingsOk = true;
+
+                try { await loadScreens(); }
+                catch (e) { screensOk = false; console.warn('[Overlay panel] loadScreens failed:', e); }
+
+                try { await loadSettings(); }
+                catch (e) { settingsOk = false; console.warn('[Overlay panel] loadSettings failed:', e); }
+
+                if (!settingsOk) {
+                    applySettings({ ...DEFAULT_SETTINGS });
+                    showError(
+                        'Could not reach /api/overlay/settings — showing defaults. ' +
+                        'Check that the overlay controller is registered in the build you are running.'
+                    );
+                } else if (!screensOk) {
+                    showError('Could not list displays (/api/overlay/screens). Only "Primary (auto)" is available.');
+                }
+
+                els.backdrop.classList.add('open');
+            }
+
             function close() { els.backdrop.classList.remove('open'); }
 
             els.trigger && els.trigger.addEventListener('click', open);
@@ -2058,39 +2168,33 @@
             });
 
             async function loadScreens() {
-                try {
-                    const r = await fetch('/api/overlay/screens');
-                    const list = await r.json();
-                    els.screen.innerHTML = '';
-                    const primary = document.createElement('option');
-                    primary.value = -1;
-                    primary.textContent = 'Primary (auto)';
-                    els.screen.appendChild(primary);
-                    list.forEach(s => {
-                        const o = document.createElement('option');
-                        o.value = s.index;
-                        o.textContent =
-                            '#' + (s.index + 1) + ' ' + s.name + ' (' + s.width + '×' + s.height + ')' +
-                            (s.isPrimary ? ' — primary' : '');
-                        els.screen.appendChild(o);
-                    });
-                } catch (_) { /* leave dropdown as-is */ }
+                const r = await fetch('/api/overlay/screens');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const list = await r.json();
+                els.screen.innerHTML = '';
+                const primary = document.createElement('option');
+                primary.value = -1;
+                primary.textContent = 'Primary (auto)';
+                els.screen.appendChild(primary);
+                list.forEach(s => {
+                    const o = document.createElement('option');
+                    o.value = s.index;
+                    o.textContent =
+                        '#' + (s.index + 1) + ' ' + s.name + ' (' + s.width + '×' + s.height + ')' +
+                        (s.isPrimary ? ' — primary' : '');
+                    els.screen.appendChild(o);
+                });
             }
 
             async function loadSettings() {
                 const r = await fetch('/api/overlay/settings');
-                current = await r.json();
-                els.enabled.checked = !!current.enabled;
-                els.hideIdle.checked = !!current.hideWhenIdle;
-                els.screen.value = current.screenIndex != null ? current.screenIndex : -1;
-                els.margin.value = current.margin != null ? current.margin : 12;
-                els.opacity.value = current.opacity != null ? current.opacity : 0.80;
-                els.fontSize.value = current.fontSize != null ? current.fontSize : 12;
-                paintAnchor(current.anchor || 'TopRight');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                applySettings(await r.json());
             }
 
             els.save.addEventListener('click', async () => {
                 if (!current) return;
+                els.saved.classList.remove('error');
                 const payload = {
                     enabled: els.enabled.checked,
                     hideWhenIdle: els.hideIdle.checked,
@@ -2100,15 +2204,24 @@
                     opacity: parseFloat(els.opacity.value),
                     fontSize: parseFloat(els.fontSize.value)
                 };
-                const r = await fetch('/api/overlay/settings', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (r.ok) {
+                try {
+                    const r = await fetch('/api/overlay/settings', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
                     current = await r.json();
+                    clearError();
+                    els.saved.textContent = 'Saved';
                     els.saved.classList.add('show');
                     setTimeout(() => els.saved.classList.remove('show'), 1300);
+                } catch (e) {
+                    console.warn('[Overlay panel] save failed:', e);
+                    els.saved.textContent = 'Save failed';
+                    els.saved.classList.add('show', 'error');
+                    showError('Save failed: ' + e.message + '. The PUT to /api/overlay/settings did not succeed.');
+                    setTimeout(() => els.saved.classList.remove('show'), 2500);
                 }
             });
         })();

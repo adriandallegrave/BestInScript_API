@@ -171,6 +171,27 @@
         #bis-ov-saved.show {
             opacity: 1;
         }
+
+        #bis-ov-saved.error {
+            color: var(--red);
+        }
+
+    /* Inline error banner so the user sees API failures instead of nothing. */
+    #bis-ov-error {
+        display: none;
+        margin: 0 18px 12px;
+        padding: 8px 10px;
+        background: rgba(232, 82, 82, .12);
+        border: 1px solid rgba(232, 82, 82, .4);
+        border-radius: var(--radius);
+        color: var(--red);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+        #bis-ov-error.show {
+            display: block;
+        }
 </style>
 
 <div id="bis-ov-backdrop" role="dialog" aria-modal="true" aria-labelledby="bis-ov-title">
@@ -179,6 +200,8 @@
             <h2 id="bis-ov-title">Overlay Settings</h2>
             <button id="bis-ov-close" type="button" aria-label="Close">✕</button>
         </header>
+
+        <div id="bis-ov-error"></div>
 
         <div id="bis-ov-body">
             <label class="bis-ov-check">
@@ -248,7 +271,9 @@
         const els = {
             trigger: $('bis-ov-trigger'),
             backdrop: $('bis-ov-backdrop'),
+            dialog: $('bis-ov-dialog'),
             close: $('bis-ov-close'),
+            error: $('bis-ov-error'),
             enabled: $('bis-ov-enabled'),
             hideIdle: $('bis-ov-hideidle'),
             screen: $('bis-ov-screen'),
@@ -261,17 +286,74 @@
         };
         let current = null;
 
+        // Defaults applied when /api/overlay/settings can't be reached. They
+        // mirror the OverlaySettings record so the dialog stays usable as a
+        // local-only editor and the user can SEE that the API is broken
+        // instead of silently getting nothing on click.
+        const DEFAULT_SETTINGS = Object.freeze({
+            enabled: false,
+            hideWhenIdle: false,
+            screenIndex: -1,
+            anchor: 'TopRight',
+            margin: 12,
+            opacity: 0.80,
+            fontSize: 12
+        });
+
+        function showError(msg) {
+            console.warn('[Overlay panel]', msg);
+            els.error.textContent = msg;
+            els.error.classList.add('show');
+        }
+
+        function clearError() {
+            els.error.textContent = '';
+            els.error.classList.remove('show');
+        }
+
         function paintAnchor(value) {
             els.anchors.querySelectorAll('button').forEach(b => {
                 b.classList.toggle('active', b.dataset.a === value);
             });
         }
 
-        function open() {
-            loadScreens().then(loadSettings).then(() => {
-                els.backdrop.classList.add('open');
-            });
+        function applySettings(s) {
+            current = s;
+            els.enabled.checked = !!s.enabled;
+            els.hideIdle.checked = !!s.hideWhenIdle;
+            els.screen.value = s.screenIndex != null ? s.screenIndex : -1;
+            els.margin.value = s.margin != null ? s.margin : DEFAULT_SETTINGS.margin;
+            els.opacity.value = s.opacity != null ? s.opacity : DEFAULT_SETTINGS.opacity;
+            els.fontSize.value = s.fontSize != null ? s.fontSize : DEFAULT_SETTINGS.fontSize;
+            paintAnchor(s.anchor || DEFAULT_SETTINGS.anchor);
         }
+
+        async function open() {
+            // Always open the dialog, even if API calls fail — the user needs
+            // to see something happen when they click. Errors are surfaced in
+            // the inline banner above the form.
+            clearError();
+            let screensOk = true, settingsOk = true;
+
+            try { await loadScreens(); }
+            catch (e) { screensOk = false; console.warn('[Overlay panel] loadScreens failed:', e); }
+
+            try { await loadSettings(); }
+            catch (e) { settingsOk = false; console.warn('[Overlay panel] loadSettings failed:', e); }
+
+            if (!settingsOk) {
+                applySettings({ ...DEFAULT_SETTINGS });
+                showError(
+                    'Could not reach /api/overlay/settings — showing defaults. ' +
+                    'Check that the overlay controller is registered in the build you are running.'
+                );
+            } else if (!screensOk) {
+                showError('Could not list displays (/api/overlay/screens). Only "Primary (auto)" is available.');
+            }
+
+            els.backdrop.classList.add('open');
+        }
+
         function close() { els.backdrop.classList.remove('open'); }
 
         els.trigger && els.trigger.addEventListener('click', open);
@@ -291,39 +373,33 @@
         });
 
         async function loadScreens() {
-            try {
-                const r = await fetch('/api/overlay/screens');
-                const list = await r.json();
-                els.screen.innerHTML = '';
-                const primary = document.createElement('option');
-                primary.value = -1;
-                primary.textContent = 'Primary (auto)';
-                els.screen.appendChild(primary);
-                list.forEach(s => {
-                    const o = document.createElement('option');
-                    o.value = s.index;
-                    o.textContent =
-                        '#' + (s.index + 1) + ' ' + s.name + ' (' + s.width + '×' + s.height + ')' +
-                        (s.isPrimary ? ' — primary' : '');
-                    els.screen.appendChild(o);
-                });
-            } catch (_) { /* leave dropdown as-is */ }
+            const r = await fetch('/api/overlay/screens');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const list = await r.json();
+            els.screen.innerHTML = '';
+            const primary = document.createElement('option');
+            primary.value = -1;
+            primary.textContent = 'Primary (auto)';
+            els.screen.appendChild(primary);
+            list.forEach(s => {
+                const o = document.createElement('option');
+                o.value = s.index;
+                o.textContent =
+                    '#' + (s.index + 1) + ' ' + s.name + ' (' + s.width + '×' + s.height + ')' +
+                    (s.isPrimary ? ' — primary' : '');
+                els.screen.appendChild(o);
+            });
         }
 
         async function loadSettings() {
             const r = await fetch('/api/overlay/settings');
-            current = await r.json();
-            els.enabled.checked = !!current.enabled;
-            els.hideIdle.checked = !!current.hideWhenIdle;
-            els.screen.value = current.screenIndex != null ? current.screenIndex : -1;
-            els.margin.value = current.margin != null ? current.margin : 12;
-            els.opacity.value = current.opacity != null ? current.opacity : 0.80;
-            els.fontSize.value = current.fontSize != null ? current.fontSize : 12;
-            paintAnchor(current.anchor || 'TopRight');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            applySettings(await r.json());
         }
 
         els.save.addEventListener('click', async () => {
             if (!current) return;
+            els.saved.classList.remove('error');
             const payload = {
                 enabled: els.enabled.checked,
                 hideWhenIdle: els.hideIdle.checked,
@@ -333,15 +409,24 @@
                 opacity: parseFloat(els.opacity.value),
                 fontSize: parseFloat(els.fontSize.value)
             };
-            const r = await fetch('/api/overlay/settings', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (r.ok) {
+            try {
+                const r = await fetch('/api/overlay/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
                 current = await r.json();
+                clearError();
+                els.saved.textContent = 'Saved';
                 els.saved.classList.add('show');
                 setTimeout(() => els.saved.classList.remove('show'), 1300);
+            } catch (e) {
+                console.warn('[Overlay panel] save failed:', e);
+                els.saved.textContent = 'Save failed';
+                els.saved.classList.add('show', 'error');
+                showError('Save failed: ' + e.message + '. The PUT to /api/overlay/settings did not succeed.');
+                setTimeout(() => els.saved.classList.remove('show'), 2500);
             }
         });
     })();
