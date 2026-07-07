@@ -17,6 +17,17 @@
 	</ItemGroup>
 
 	<!--
+    The app csproj sits at the repo root, so the SDK's default **/*.cs glob
+    would otherwise compile the test project's sources into the app.
+  -->
+	<ItemGroup>
+		<Compile Remove="BestInScript.Tests/**" />
+		<Content Remove="BestInScript.Tests/**" />
+		<None Remove="BestInScript.Tests/**" />
+		<EmbeddedResource Remove="BestInScript.Tests/**" />
+	</ItemGroup>
+
+	<!--
     UseWindowsForms=true swaps in the WindowsDesktop implicit-usings set,
     which drops the Web SDK's implicit System.IO. Re-add it project-wide
     so existing files (ScriptRepository, etc.) continue to compile.

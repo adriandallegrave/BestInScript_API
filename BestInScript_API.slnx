@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="BestInScript_API.csproj" />
+  <Project Path="BestInScript.Tests/BestInScript.Tests.csproj" />
 </Solution>
