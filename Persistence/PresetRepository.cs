@@ -1,7 +1,7 @@
 using System.Text.Json;
 using BestInScript.API.Models;
 
-namespace BestInScript.API.Services
+namespace BestInScript.API.Persistence
 {
     /// <summary>
     /// Persists Preset objects to a JSON file on disk. Thread-safe via lock.

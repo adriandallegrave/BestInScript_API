@@ -2,8 +2,10 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using BestInScript.API.Models;
+using BestInScript.API.Persistence;
+using BestInScript.API.Services;
 
-namespace BestInScript.API.Services
+namespace BestInScript.API.Engine
 {
     /// <summary>
     /// Manages a global low-level keyboard hook (WH_KEYBOARD_LL) on a dedicated

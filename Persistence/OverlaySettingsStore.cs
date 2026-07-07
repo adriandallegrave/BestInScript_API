@@ -1,8 +1,8 @@
 using System.IO;
 using System.Text.Json;
-using BestInScript.API.Services;
+using BestInScript.API.Overlay;
 
-namespace BestInScript.API.Overlay
+namespace BestInScript.API.Persistence
 {
     /// <summary>
     /// Loads / saves <see cref="OverlaySettings"/> to a JSON file.
