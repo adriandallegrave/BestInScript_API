@@ -159,14 +159,26 @@
             overflow: hidden;
         }
 
-        #sidebar-head {
-            padding: 16px 16px 12px;
+        .sidebar-section {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 120px;
+            overflow: hidden;
+        }
+
+            .sidebar-section + .sidebar-section {
+                border-top: 1px solid var(--border);
+            }
+
+        .sidebar-head {
+            padding: 14px 16px 10px;
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-            #sidebar-head span {
+            .sidebar-head span {
                 flex: 1;
                 font-weight: 700;
                 font-size: 13px;
@@ -175,26 +187,95 @@
                 color: var(--muted);
             }
 
-        #btn-new {
+        #btn-new, #btn-new-preset {
             background: var(--accent);
             color: #000;
             padding: 7px 14px;
             font-weight: 700;
         }
 
-        #script-list {
+        .sidebar-list {
             flex: 1;
             overflow-y: auto;
             padding: 0 8px 8px;
         }
 
-            #script-list::-webkit-scrollbar {
+            .sidebar-list::-webkit-scrollbar {
                 width: 4px;
             }
 
-            #script-list::-webkit-scrollbar-thumb {
+            .sidebar-list::-webkit-scrollbar-thumb {
                 background: var(--border);
                 border-radius: 4px;
+            }
+
+        /* Preset card mirrors script card but tinted */
+        .preset-card .key-badge {
+            color: var(--green) !important;
+        }
+
+        .preset-card .meta-members {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        /* Member checklist on the preset editor */
+        .member-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 360px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px;
+            background: var(--bg0);
+        }
+
+        .member-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 9px;
+            border-radius: 5px;
+            background: var(--bg2);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: border-color .12s, background .12s;
+        }
+
+            .member-row:hover {
+                border-color: var(--accent);
+            }
+
+            .member-row.checked {
+                border-color: var(--accent);
+                background: var(--bg3);
+            }
+
+            .member-row input[type=checkbox] {
+                width: 16px;
+                height: 16px;
+                accent-color: var(--accent);
+                margin: 0;
+                cursor: pointer;
+            }
+
+            .member-row .name {
+                flex: 1;
+                font-weight: 600;
+                font-size: 13px;
+            }
+
+            .member-row .key {
+                font-family: monospace;
+                font-size: 11px;
+                color: var(--accent2);
+                background: var(--bg0);
+                padding: 2px 8px;
+                border-radius: 4px;
+                border: 1px solid var(--border);
             }
 
         .script-card {
@@ -856,11 +937,20 @@
 
             <!-- Sidebar -->
             <aside id="sidebar">
-                <div id="sidebar-head">
-                    <span>Scripts</span>
-                    <button id="btn-new">+ New</button>
+                <div class="sidebar-section">
+                    <div class="sidebar-head">
+                        <span>Scripts</span>
+                        <button id="btn-new">+ New</button>
+                    </div>
+                    <div id="script-list" class="sidebar-list"></div>
                 </div>
-                <div id="script-list"></div>
+                <div class="sidebar-section">
+                    <div class="sidebar-head">
+                        <span>Presets</span>
+                        <button id="btn-new-preset">+ New</button>
+                    </div>
+                    <div id="preset-list" class="sidebar-list"></div>
+                </div>
             </aside>
 
             <!-- Editor -->
@@ -898,7 +988,15 @@
         // ── State ────────────────────────────────────────────────────────────────────
         let scripts = [];
         let statuses = {};
-        let selected = null;   // ScriptConfig being edited (null = none)
+
+        let presets = [];
+        let presetStatuses = {};
+
+        // The thing currently in the editor.
+        //   selectedKind: 'script' | 'preset' | null
+        //   selected:     ScriptConfig or Preset object (always a deep copy)
+        let selected = null;
+        let selectedKind = null;
         let isNew = false;
         let capturing = false;
 
@@ -909,6 +1007,7 @@
         // ── Bootstrap ────────────────────────────────────────────────────────────────
         (async () => {
             await loadScripts();
+            await loadPresets();
             renderSidebar();
             showNoScript();
             pollStatus();
@@ -922,12 +1021,25 @@
             } catch { scripts = []; }
         }
 
+        async function loadPresets() {
+            try {
+                const r = await fetch(`${API}/presets`);
+                presets = await r.json();
+            } catch { presets = []; }
+        }
+
         async function pollStatus() {
             try {
-                const r = await fetch(`${API}/engine/status`);
-                const list = await r.json();
+                const [sr, pr] = await Promise.all([
+                    fetch(`${API}/engine/status`),
+                    fetch(`${API}/presets/status`)
+                ]);
+                const scriptList = await sr.json();
+                const presetList = await pr.json();
                 statuses = {};
-                list.forEach(s => statuses[s.id] = s.isRunning);
+                scriptList.forEach(s => statuses[s.id] = s.isRunning);
+                presetStatuses = {};
+                presetList.forEach(p => presetStatuses[p.id] = p.isActive);
                 document.getElementById('status-dot').classList.remove('error');
                 document.getElementById('status-label').textContent = 'Engine running';
                 renderSidebarCards();
@@ -944,6 +1056,11 @@
         }
 
         function renderSidebarCards() {
+            renderScriptCards();
+            renderPresetCards();
+        }
+
+        function renderScriptCards() {
             const el = document.getElementById('script-list');
             if (!scripts.length) {
                 el.innerHTML = '<div class="empty-state">No scripts yet.<br>Click <strong>+ New</strong> to get started.</div>';
@@ -951,7 +1068,7 @@
             }
             el.innerHTML = scripts.map(s => {
                 const running = !!statuses[s.id];
-                const sel = selected && selected.id === s.id ? 'selected' : '';
+                const sel = selectedKind === 'script' && selected && selected.id === s.id ? 'selected' : '';
                 const pixelTag = s.pixelTrigger ? ' · 👁 pixel' : '';
                 const overlayTag = s.showInOverlay ? ' · 📺 overlay' : '';
                 return `
@@ -966,12 +1083,36 @@
             }).join('');
         }
 
+        function renderPresetCards() {
+            const el = document.getElementById('preset-list');
+            if (!presets.length) {
+                el.innerHTML = '<div class="empty-state">No presets yet.<br>Click <strong>+ New</strong> to group scripts.</div>';
+                return;
+            }
+            el.innerHTML = presets.map(p => {
+                const active = !!presetStatuses[p.id];
+                const sel = selectedKind === 'preset' && selected && selected.id === p.id ? 'selected' : '';
+                const overlayTag = p.showInOverlay ? ' · 📺 overlay' : '';
+                const count = (p.scriptIds || []).length;
+                return `
+          <div class="script-card preset-card ${sel}" data-id="${p.id}" onclick="selectPreset('${p.id}')">
+            <div class="key-badge">${esc(p.triggerKey)}</div>
+            <div class="info">
+              <div class="name">${esc(p.name)}</div>
+              <div class="meta">${count} script${count !== 1 ? 's' : ''}${overlayTag}</div>
+            </div>
+            ${active ? '<div class="running-pill">● ON</div>' : ''}
+          </div>`;
+            }).join('');
+        }
+
         // ── Selection ─────────────────────────────────────────────────────────────────
         function selectScript(id) {
             const s = scripts.find(x => x.id === id);
             if (!s) return;
             stopPixelLive();
             isNew = false;
+            selectedKind = 'script';
             selected = JSON.parse(JSON.stringify(s)); // deep copy
             renderEditor();
         }
@@ -979,6 +1120,7 @@
         function newScript() {
             stopPixelLive();
             isNew = true;
+            selectedKind = 'script';
             selected = {
                 id: null, name: 'New Script', triggerKey: '3',
                 steps: [{ hold: [], press: [] }], delayMin: 0.4, delayMax: 0.6,
@@ -988,9 +1130,35 @@
             renderEditor();
         }
 
+        function selectPreset(id) {
+            const p = presets.find(x => x.id === id);
+            if (!p) return;
+            stopPixelLive();
+            isNew = false;
+            selectedKind = 'preset';
+            selected = JSON.parse(JSON.stringify(p));
+            if (!Array.isArray(selected.scriptIds)) selected.scriptIds = [];
+            renderEditor();
+        }
+
+        function newPreset() {
+            stopPixelLive();
+            isNew = true;
+            selectedKind = 'preset';
+            selected = {
+                id: null,
+                name: 'New Preset',
+                triggerKey: 'F1',
+                scriptIds: [],
+                showInOverlay: false
+            };
+            renderEditor();
+        }
+
         function showNoScript() {
             stopPixelLive();
             selected = null;
+            selectedKind = null;
             document.getElementById('no-script').style.display = 'flex';
             // remove any injected panels
             document.querySelectorAll('#editor .panel, #editor .action-bar').forEach(el => el.remove());
@@ -998,6 +1166,11 @@
 
         // ── Editor render ─────────────────────────────────────────────────────────────
         function renderEditor() {
+            if (selectedKind === 'preset') { renderPresetEditor(); return; }
+            renderScriptEditor();
+        }
+
+        function renderScriptEditor() {
             // Any live readout belongs to the previous render's DOM — kill it first.
             stopPixelLive();
 
@@ -1122,6 +1295,102 @@
             d.className = 'panel';
             d.innerHTML = `<div class="panel-title">${title}</div>${html}`;
             return d;
+        }
+
+        // ── Preset editor ─────────────────────────────────────────────────────────────
+        function renderPresetEditor() {
+            stopPixelLive();
+
+            const noScript = document.getElementById('no-script');
+            noScript.style.display = 'none';
+            document.querySelectorAll('#editor .panel, #editor .action-bar').forEach(el => el.remove());
+
+            const editor = document.getElementById('editor');
+
+            const basic = mkPanel('Preset Settings', `
+        <div class="form-row">
+          <div class="form-group full">
+            <label>Preset Name <span style="color:var(--muted);font-weight:400;text-transform:none">(this is the save name)</span></label>
+            <input id="f-name" type="text" value="${esc(selected.name)}" placeholder="e.g. Boss DPS" />
+          </div>
+
+          <div class="form-group">
+            <label>Trigger Key <span style="color:var(--muted);font-weight:400;text-transform:none">(keyboard only)</span></label>
+            <div id="trigger-capture">
+              <div id="trigger-display">${esc(selected.triggerKey)}</div>
+              <button id="btn-capture" onclick="startCapture()">Click to Capture</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:5px">Press this key in-game to toggle every member script as a group.</div>
+          </div>
+
+          <div class="form-group full" style="margin-top:8px;padding-top:14px;border-top:1px solid var(--border)">
+            <div class="pt-toggle-row">
+              <label class="switch">
+                <input type="checkbox" id="f-show-overlay" ${selected.showInOverlay ? 'checked' : ''}
+                  onchange="syncShowOverlay(this.checked)" />
+                <span class="slider"></span>
+              </label>
+              <div>
+                <div style="font-weight:600;font-size:13px;color:var(--text)">
+                  Show in on-screen overlay
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5">
+                  Surface this preset as a row on the desktop overlay while it's active.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `);
+            editor.appendChild(basic);
+
+            const membersPanel = mkPanel('Member Scripts', `
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+          Activating this preset starts every checked script as if you pressed its trigger key.
+          Deactivating releases this preset's claim — a script keeps running if any other
+          preset (or your direct keypress) still wants it on.
+        </div>
+        <div id="member-list" class="member-list"></div>
+      `);
+            editor.appendChild(membersPanel);
+            renderMemberList();
+
+            const bar = document.createElement('div');
+            bar.className = 'action-bar';
+            bar.innerHTML = `
+        <button id="btn-delete" onclick="deletePreset()" ${isNew ? 'style="display:none"' : ''}>🗑 Delete</button>
+        <div class="spacer"></div>
+        <button id="btn-save" onclick="savePreset()">💾 Save Preset</button>
+      `;
+            editor.appendChild(bar);
+
+            renderSidebarCards();
+        }
+
+        function renderMemberList() {
+            const list = document.getElementById('member-list');
+            if (!list) return;
+            if (!scripts.length) {
+                list.innerHTML = '<div class="empty-state" style="padding:18px">No scripts to group. Create some scripts first.</div>';
+                return;
+            }
+            const owned = new Set(selected.scriptIds || []);
+            list.innerHTML = scripts.map(s => {
+                const checked = owned.has(s.id);
+                return `
+          <label class="member-row ${checked ? 'checked' : ''}" data-id="${s.id}">
+            <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleMember('${s.id}', this.checked)" />
+            <div class="name">${esc(s.name)}</div>
+            <div class="key">${esc(s.triggerKey)}</div>
+          </label>`;
+            }).join('');
+        }
+
+        function toggleMember(id, on) {
+            const set = new Set(selected.scriptIds || []);
+            if (on) set.add(id); else set.delete(id);
+            selected.scriptIds = [...set];
+            renderMemberList();
         }
 
         // ── Steps rendering ────────────────────────────────────────────────────────────
@@ -1758,6 +2027,59 @@
             }
         }
 
+        async function savePreset() {
+            selected.name = document.getElementById('f-name').value.trim();
+            if (!selected.name) { toast('Preset name is required.', 'error'); return; }
+
+            const payload = {
+                id: selected.id || '00000000-0000-0000-0000-000000000000',
+                name: selected.name,
+                triggerKey: selected.triggerKey,
+                scriptIds: selected.scriptIds || [],
+                showInOverlay: !!selected.showInOverlay
+            };
+
+            try {
+                const url = isNew ? `${API}/presets` : `${API}/presets/${selected.id}`;
+                const method = isNew ? 'POST' : 'PUT';
+                const r = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!r.ok) {
+                    const txt = await r.text();
+                    toast('Save failed: ' + txt, 'error');
+                    return;
+                }
+                const saved = await r.json();
+                selected = saved;
+                if (!Array.isArray(selected.scriptIds)) selected.scriptIds = [];
+                isNew = false;
+                await loadPresets();
+                renderSidebar();
+                renderEditor();
+                toast(`"${saved.name}" saved ✓`, 'success');
+            } catch (e) {
+                toast('Network error: ' + e.message, 'error');
+            }
+        }
+
+        async function deletePreset() {
+            if (!selected || isNew) return;
+            if (!confirm(`Delete preset "${selected.name}"? This cannot be undone.`)) return;
+            try {
+                const r = await fetch(`${API}/presets/${selected.id}`, { method: 'DELETE' });
+                if (!r.ok) { toast('Delete failed', 'error'); return; }
+                await loadPresets();
+                showNoScript();
+                renderSidebar();
+                toast('Preset deleted.', 'success');
+            } catch (e) {
+                toast('Network error: ' + e.message, 'error');
+            }
+        }
+
         // ── Stop all ──────────────────────────────────────────────────────────────────
         document.getElementById('btn-stop-all').addEventListener('click', async () => {
             try {
@@ -1766,8 +2088,9 @@
             } catch { toast('Could not reach API.', 'error'); }
         });
 
-        // ── New script ────────────────────────────────────────────────────────────────
+        // ── New script / preset ───────────────────────────────────────────────────────
         document.getElementById('btn-new').addEventListener('click', newScript);
+        document.getElementById('btn-new-preset').addEventListener('click', newPreset);
 
         // ── Toast ─────────────────────────────────────────────────────────────────────
         function toast(msg, type = 'success') {

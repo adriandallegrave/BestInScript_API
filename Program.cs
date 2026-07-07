@@ -17,6 +17,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 builder.Services.AddSingleton<ScriptRepository>();
+builder.Services.AddSingleton<PresetRepository>();
 builder.Services.AddSingleton<InputSimulatorService>();
 builder.Services.AddSingleton<ScreenColorService>();
 builder.Services.AddSingleton<HotkeyEngine>();

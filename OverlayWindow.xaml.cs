@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using BestInScript.API.Models;
 using BestInScript.API.Services;
 
 // Disambiguation. UseWindowsForms=true implicitly imports System.Drawing and
@@ -132,9 +133,11 @@ namespace BestInScript.API.Overlay
         private void Refresh()
         {
             List<ScriptStatus> statuses;
+            List<PresetStatus> presets;
             try
             {
                 statuses = _engine.GetStatus().ToList();
+                presets  = _engine.GetPresetStatus().ToList();
             }
             catch
             {
@@ -145,13 +148,20 @@ namespace BestInScript.API.Overlay
             // Only display scripts the user has opted in via ShowInOverlay AND
             // that are currently toggled on. Both kinds (pixel + blind) live in
             // the same list; the display style is decided per row in BuildRow.
-            var displayable = statuses
+            var scriptRows = statuses
                 .Where(s => s.IsRunning && s.ShowInOverlay)
-                .ToList();
+                .Select(BuildRow);
 
-            List<(Brush Dot, string Text)> rows;
+            // Active presets with ShowInOverlay enabled — shown like blind-loop
+            // scripts (green dot + "Name · ON"). Presets render above scripts so
+            // the overlay reads top-down as "group then members".
+            var presetRows = presets
+                .Where(p => p.IsActive && p.ShowInOverlay)
+                .Select(p => ((Brush Dot, string Text))(ActiveDot, $"[{p.Name}] · ON"));
 
-            if (displayable.Count == 0)
+            var rows = presetRows.Concat(scriptRows).ToList();
+
+            if (rows.Count == 0)
             {
                 if (_settings.HideWhenIdle)
                 {
@@ -159,10 +169,6 @@ namespace BestInScript.API.Overlay
                     return;
                 }
                 rows = new() { (IdleDot, "BestInScript · idle") };
-            }
-            else
-            {
-                rows = displayable.Select(BuildRow).ToList();
             }
 
             ApplyRows(rows);

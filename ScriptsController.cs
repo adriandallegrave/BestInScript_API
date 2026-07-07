@@ -10,17 +10,20 @@ namespace BestInScript.API.Controllers
     public class ScriptsController : ControllerBase
     {
         private readonly ScriptRepository  _repo;
+        private readonly PresetRepository  _presetRepo;
         private readonly HotkeyEngine      _engine;
         private readonly InputSimulatorService _inputSim;
 
         public ScriptsController(
             ScriptRepository repo,
+            PresetRepository presetRepo,
             HotkeyEngine engine,
             InputSimulatorService inputSim)
         {
-            _repo     = repo;
-            _engine   = engine;
-            _inputSim = inputSim;
+            _repo       = repo;
+            _presetRepo = presetRepo;
+            _engine     = engine;
+            _inputSim   = inputSim;
         }
 
         // GET /api/scripts
@@ -96,6 +99,15 @@ namespace BestInScript.API.Controllers
                     $"Invalid trigger key '{script.TriggerKey}'. " +
                     "Must be a keyboard key (not a mouse button). " +
                     "Call GET /api/scripts/valid-keys for the full list.");
+
+            // Trigger key cannot collide with a preset's trigger.
+            var presetCollision = _presetRepo.GetAll()
+                .FirstOrDefault(p => string.Equals(
+                    p.TriggerKey, script.TriggerKey, StringComparison.OrdinalIgnoreCase));
+            if (presetCollision != null)
+                return BadRequest(
+                    $"Trigger key '{script.TriggerKey}' is already used by preset '{presetCollision.Name}'. " +
+                    "Pick a different key.");
 
             if (script.DelayMin < 0.1 || script.DelayMax > 5.0 || script.DelayMin > script.DelayMax)
                 return BadRequest("DelayMin must be ≥0.1 s, DelayMax must be ≤5.0 s, and Min must be ≤Max.");
