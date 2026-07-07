@@ -1,50 +1,49 @@
-# BestInScript — ARPG Macro Engine
+# BestInScript
 
-A local Windows-only ASP.NET Core app that lets you assign keyboard macro scripts
-to toggle keys, designed to help with repetitive ARPG skill rotations
-(Diablo 4, Last Epoch, Path of Exile, etc.).
+A personal macro/autocast assistant for Diablo 4 on Windows. It exists for one reason: to prevent repetitive-strain injury (RSI / carpal tunnel) from hundreds of hours of play per season — not to gain an unfair advantage.
 
----
+## Purpose & fair play
 
-## How it works
+This tool replaces *repetitive* keystrokes, not skill. Its design deliberately favors humanlike behavior over efficiency:
 
-1. You define a **Script**: a trigger key + a sequence of steps + delay settings.
-2. Run the API and leave it open in the background while you play.
-3. Press the trigger key in-game (e.g. `3`) to **toggle** the script **ON**.
-4. The script loops through its steps indefinitely, pressing/holding the
-   configured keys with a random delay between each step.
-5. Press the trigger key again to **toggle it OFF**.
-6. The trigger key is **not suppressed** – the game still receives it normally.
+- **Keystrokes are hardware-identical.** Input goes through Win32 `SendInput` with `KEYEVENTF_SCANCODE`, so every event looks exactly like a real key press from the physical keyboard.
+- **Humanlike delays are mandatory.** Every script step waits a randomized delay between `DelayMin` and `DelayMax` (0.1–5.0 s, enforced at the API layer). Delays must never be removed or shrunk below human speed.
+- **Conservative over efficient.** When there is a choice between faster/robotic and slower/humanlike behavior, the humanlike option always wins.
+- **The trigger key is never suppressed** — the game always receives your real key press.
+- **Pixel reads are passive.** Cooldown detection uses GDI `GetPixel` on the screen; the game process is never touched.
 
----
+## Features
+
+- **Scripts** — a named sequence of steps, each holding (`hold`) and/or tapping (`press`) keys, toggled on/off by a global trigger key that works while the game is focused.
+- **Presets** — one trigger key toggles a whole group of scripts at once (e.g. a build's full rotation).
+- **Pixel-gated autocast** — a script can watch one screen pixel (e.g. a skill icon) and only fire when it reads as "ready", using a two-color ready/cooldown comparison that is robust to lighting drift.
+- **Overlay** — a topmost, click-through pill showing which scripts/presets are active and the live pixel state (`READY` / `waiting` / `unreadable`).
+- **Web UI + REST API** — configure everything in the browser; Swagger UI available for the raw API.
 
 ## Requirements
 
-- Windows 10/11 x64
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
-
----
+- Windows 10/11 x64.
+- Diablo 4 in **borderless-windowed** mode (fullscreen-exclusive blocks both the overlay and pixel reads).
+- Run as Administrator **only if the game does** — otherwise the global keyboard hook won't fire while the game is focused.
+- [.NET SDK](https://dotnet.microsoft.com/download) is only needed to build; the published exe is self-contained.
 
 ## Getting started
 
-```powershell
-# 1. Restore packages and run
-cd BestInScript_API
-dotnet run
+1. Publish a self-contained build:
 
-# The browser will open automatically to:
-#   Swagger UI  →  http://localhost:5238/swagger
-#   Config UI   →  http://localhost:5238
-```
+   ```powershell
+   dotnet publish -c Release -r win-x64 --self-contained
+   ```
 
-> **Tip:** Run the terminal as a normal user — `WH_KEYBOARD_LL` does not need
-> administrator rights. However, if the game runs as Administrator you may need
-> to also run this app as Administrator for the hook to fire while the game
-> window is focused.
+2. Create a shortcut to the published exe (e.g. pin it to the Start menu).
+3. Launch it — the server starts at **http://localhost:5000**.
+4. Open that address in a browser to configure scripts, presets, and the overlay. Swagger UI is at `/swagger`.
 
----
+For development, `dotnet run` serves on the ports from `Properties/launchSettings.json` (https 57997 / http 57998) instead.
 
-## Script structure
+## Scripts
+
+A script is a trigger key + a sequence of steps + a delay window. Press the trigger in-game to toggle it on; the steps loop with a random humanlike delay between each until you toggle it off.
 
 ```jsonc
 {
@@ -78,47 +77,52 @@ dotnet run
 | Numpad     | NumPad0 – NumPad9, Multiply, Add, Subtract, Decimal, Divide |
 | Mouse      | Mouse1 (left), Mouse2 (right), Mouse3 (middle), Mouse4, Mouse5 |
 
-> Mouse buttons can be used **in steps** (press/hold) but **not as trigger keys**.
+> Mouse buttons can be used **in steps** (press/hold) but **not as trigger keys**. Trigger keys must be globally unique across scripts and presets.
 
----
+## REST API
 
-## API endpoints
+All under `/api/[controller]`; full schema in Swagger at `/swagger`.
 
-| Method | URL | Description |
-|--------|-----|-------------|
-| GET    | `/api/scripts` | List all scripts |
-| POST   | `/api/scripts` | Create a script |
-| PUT    | `/api/scripts/{id}` | Update a script |
-| DELETE | `/api/scripts/{id}` | Delete a script |
-| GET    | `/api/engine/status` | Runtime status (which scripts are running) |
-| POST   | `/api/engine/stop-all` | Stop all running scripts |
-| GET    | `/api/scripts/valid-keys` | Full list of valid key names |
+| Route | Purpose |
+|-------|---------|
+| `/api/scripts` (CRUD + `/status`, `/valid-keys`) | Script definitions |
+| `/api/presets` (CRUD + `/status`) | Preset definitions |
+| `/api/engine/status`, `/api/engine/stop-all` | Aggregate status; emergency stop |
+| `/api/overlay/settings`, `/api/overlay/screens` | Overlay placement + monitor list |
+| `/api/screen/color`, `/api/screen/cursor` | Pixel/cursor sampling for pixel-trigger setup |
 
----
+## Configuration & data
 
-## UI
+All configuration lives in three JSON files, stored in `C:\temp` by default:
 
-Open `http://localhost:5238` for the graphical config UI.
+| File | Contents |
+|------|----------|
+| `scripts.json` | Script definitions (trigger key, steps, delays, pixel trigger) |
+| `presets.json` | Preset definitions (trigger key, member scripts) |
+| `overlay-settings.json` | Overlay placement and style |
 
-- Create/edit scripts with a click-to-capture trigger key
-- Add steps with hold/press key chips and autocomplete
-- Drag-free delay sliders with real-time preview
-- Live status polling (green badge when a script is active)
-- Emergency **Stop All** button in the header
+The location is configurable in `appsettings.json` via `BestInScript:DataDirectory` (or per-file with `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`). Everything reloads on startup; if the app crashes or closes, held keys are released.
 
----
+## Versioning
 
-## Data storage
+Semantic versioning, starting at **1.0.0** (the current state):
 
-Scripts are saved to `scripts.json` next to the executable
-(or wherever `BestInScript:DataFilePath` points in `appsettings.json`).
-The engine reloads all scripts on startup automatically.
+- **Patch** (`1.0.+1`) — bug fix, no new behavior.
+- **Minor** (`1.+1.0`) — new feature, backwards compatible.
+- **Major** (`+1.0.0`) — breaking change: existing data files or setup no longer work and reconfiguration is required.
 
----
+Every new feature ships with a description, a one-line commit message, a new row in the version history below, and a matching git tag (`vX.Y.Z`). Documentation-only changes do not bump the version.
 
-## Notes
+## Version history
 
-- The app only sends key events when a script is **toggled on** and the loop is running.
-- If the app crashes or is closed, all held keys are released in the `finally` block.
-- Adjust `delayMin`/`delayMax` per script to match your character's cast time/animation speed.
-- For builds with a single spammable skill just use one step with that skill key.
+| Version | Date | Commit | Description |
+|---------|------------|---------|-------------|
+| 1.0.0 | 2026-07-07 | eb615c5 | Baseline: scripts, presets, pixel-gated autocast, overlay, web UI |
+| — | 2026-05-30 | cd77acd | Document presets, ownership model, REST surface |
+| — | 2026-05-17 | b607890 | Smarter overlay |
+| — | 2026-05-15 | ac34eae | Pixel-gated casting |
+| — | 2026-05-15 | b9ef7cf | Held keys in script steps |
+| — | 2026-05-13 | 0990a35 | Status overlay |
+| — | 2026-04-07 | 431291f | First working version |
+| — | 2026-03-27 | 3ca9cee | Initial project files |
+| — | 2026-03-27 | 5f3bc13 | Repository scaffolding (.gitattributes, .gitignore, license) |

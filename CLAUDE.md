@@ -2,10 +2,48 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Design principles — fair play
+
+This app exists solely to prevent repetitive-strain injury (the user plays Diablo 4 hundreds of hours per season), **not** to gain an unfair advantage. Non-negotiable rules for every change:
+
+- All synthetic input must remain indistinguishable from real keyboard input (scan-code `SendInput`, trigger passthrough).
+- Humanlike randomized delays are **mandatory** — never remove them, shrink them below human speed, or add a "fast mode".
+- When choosing between faster/robotic and slower/humanlike behavior, always pick humanlike, even at an efficiency cost.
+
+## Versioning & release workflow
+
+Semantic versioning, tracked in the README's **Version history** table. Current baseline: **1.0.0** = commit `eb615c5`.
+
+- **Patch** `1.0.+1` — bug fix, no new behavior.
+- **Minor** `1.+1.0` — new feature, backwards compatible.
+- **Major** `+1.0.0` — breaking: existing data files (`scripts.json` / `presets.json` / `overlay-settings.json`) or setup stop working and the user must reconfigure.
+- Docs-only changes: no bump.
+
+For every user-requested feature: implement it, then (1) write a short feature description, (2) write a one-line commit message, (3) append a row to the README version table (version, date, commit, description), (4) commit, (5) `git tag vX.Y.Z`.
+
+## Key File Locations
+
+Flat single-project layout — **all source files sit at the repo root**, no subdirectories. Skip `bin/`, `obj/`, `.vs/` in searches (build output only). The Architecture section below is authoritative; don't re-explore the pipeline.
+
+| Area | Files |
+|------|-------|
+| Entry point / DI / `MapGet("/")` | `Program.cs` |
+| Core engine (hook thread, ownership, run loops) — the only large file | `HotkeyEngine.cs` |
+| Input synthesis (`SendInput`, key-name→VK map) | `InputSimulatorService.cs` |
+| Pixel reading (GDI, color distance) | `ScreenColorService.cs` |
+| Controllers | `ScriptsController.cs`, `PresetsController.cs`, `EngineController.cs`, `OverlayController.cs`, `ScreenController.cs` |
+| Models | `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs` |
+| Persistence | `ScriptRepository.cs`, `PresetRepository.cs`, `OverlaySettingsStore.cs` |
+| Overlay (WPF) | `OverlayWindow.xaml`, `OverlayWindow.xaml.cs`, `OverlayHostedService.cs` |
+| Web UI | `wwwroot/index.html` (+ `overlay-settings-panel.html`, manually pasted in) |
+| Config | `appsettings.json` (`BestInScript:DataDirectory` → `C:\temp`) |
+| Data (runtime) | `C:\temp\scripts.json`, `presets.json`, `overlay-settings.json` |
+
 ## Commands
 
 ```powershell
-# Run the app (opens Swagger at http://localhost:5238/swagger, UI at http://localhost:5238)
+# Run the app in dev mode (ports from Properties/launchSettings.json:
+# https://localhost:57997, http://localhost:57998; Swagger at /swagger)
 dotnet run
 
 # Build
@@ -14,6 +52,8 @@ dotnet build
 # Publish self-contained Windows x64 executable
 dotnet publish -c Release -r win-x64 --self-contained
 ```
+
+The **published exe** (the user's real usage — a Start-menu shortcut) has no URL config, so it serves on Kestrel's default **http://localhost:5000**. The root-level `launchSettings.json` (port 5238) is dead — tooling only reads `Properties/launchSettings.json`.
 
 No test project exists yet. No linter is configured.
 
