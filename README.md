@@ -132,6 +132,7 @@ Every new feature ships with a description, a one-line commit message, a new row
 
 | Version | Date | Commit | Description |
 |---------|------------|---------|-------------|
+| 1.3.0 | 2026-07-08 | 406b8fc | Profiles: named per-character/build/season config sets switchable from the header dropdown (`profiles/<name>/`), with copy-current for season rollover; existing files auto-migrate into a Default profile; overlay settings stay global |
 | 1.2.0 | 2026-07-08 | f02e944 | App icon (`wwwroot/app.ico`) shown in the tray, the browser tab (favicon), and the exe / Start-menu shortcut |
 | 1.1.0 | 2026-07-08 | 95f75d7 | Tray icon: published exe runs without a console window; tray menu offers open UI (also double-click), stop all scripts, exit |
 | 1.0.1 | 2026-07-08 | 9a82273 | Internal restructure: folderized layout, engine decomposed into focused classes, unit-test suite added — zero behavior change |
