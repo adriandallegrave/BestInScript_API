@@ -219,4 +219,24 @@ public class ScriptCoordinatorTests
 
         Assert.Empty(_coordinator.GetStatus());
     }
+
+    [Fact]
+    public void ClearAll_EmptiesRegistries_AndStopsRuns()
+    {
+        var s1 = Script("s1", "F1");
+        var s2 = Script("s2", "F2");
+        _coordinator.RegisterScript(s1);
+        _coordinator.RegisterScript(s2);
+        _coordinator.RegisterPreset(Preset("p", "F5", s1.Id));
+        _coordinator.HandleTriggerKey(Vk("F1")); // s1 running
+
+        _coordinator.ClearAll();
+
+        // Both registries emptied — used on a profile switch before loading the new config.
+        Assert.Empty(_coordinator.GetStatus());
+        Assert.Empty(_coordinator.GetPresetStatus());
+        Assert.Equal(0, _coordinator.ScriptCount);
+        Assert.Equal(0, _coordinator.PresetCount);
+        Assert.True(_runner.Tokens.Single().IsCancellationRequested); // the running script was cancelled
+    }
 }

@@ -20,19 +20,23 @@ namespace BestInScript.API.Engine
         private readonly IPresetRepository _presetRepo;
         private readonly KeyboardHook _hook;
         private readonly ScriptCoordinator _coordinator;
+        private readonly ProfileManager _profiles;
+        private readonly object _switchLock = new();
 
         public HotkeyEngine(
             ILogger<HotkeyEngine> logger,
             IScriptRepository repo,
             IPresetRepository presetRepo,
             KeyboardHook hook,
-            ScriptCoordinator coordinator)
+            ScriptCoordinator coordinator,
+            ProfileManager profiles)
         {
             _logger = logger;
             _repo = repo;
             _presetRepo = presetRepo;
             _hook = hook;
             _coordinator = coordinator;
+            _profiles = profiles;
         }
 
         // ── IHostedService ─────────────────────────────────────────────────────
@@ -84,6 +88,26 @@ namespace BestInScript.API.Engine
 
         /// <summary>Stops all running scripts immediately. Deactivates all presets.</summary>
         public void StopAll() => _coordinator.StopAll();
+
+        /// <summary>
+        /// Switch the active config profile: stop and drop every current registration,
+        /// repoint the data stores at the new profile, then load its scripts/presets.
+        /// Running scripts stop (by design) and presets load inactive, exactly like a
+        /// fresh start. Concurrent switches serialize on <see cref="_switchLock"/>.
+        /// </summary>
+        public void SwitchProfile(string name)
+        {
+            lock (_switchLock)
+            {
+                _logger.LogInformation("Switching profile → '{Name}'", name);
+                _coordinator.ClearAll();
+                _profiles.Activate(name);   // repoints the stores + persists the pointer
+                LoadFromRepository();
+                _logger.LogInformation(
+                    "Profile '{Name}' active. {Scripts} script(s), {Presets} preset(s) registered.",
+                    _profiles.Active, _coordinator.ScriptCount, _coordinator.PresetCount);
+            }
+        }
 
         private void LoadFromRepository()
         {

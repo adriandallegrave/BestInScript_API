@@ -145,6 +145,43 @@
             border: 1px solid var(--border);
         }
 
+        #profile-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+            #profile-bar .profile-label {
+                color: var(--muted);
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: .05em;
+            }
+
+            #profile-select {
+                background: var(--bg3);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 5px 8px;
+                font-size: 12px;
+                font-family: var(--font);
+                max-width: 200px;
+            }
+
+            #profile-bar .profile-btn {
+                background: var(--bg3);
+                color: var(--muted);
+                border: 1px solid var(--border);
+                padding: 5px 9px;
+                font-size: 13px;
+                line-height: 1;
+            }
+
+                #profile-bar .profile-btn:hover {
+                    color: var(--accent);
+                }
+
         #main {
             display: grid;
             grid-template-columns: 300px 1fr;
@@ -928,6 +965,14 @@
             <h1>⚔ BestInScript</h1>
             <span class="tagline">ARPG Macro Engine</span>
             <div class="spacer"></div>
+            <div id="profile-bar">
+                <span class="profile-label">Profile</span>
+                <select id="profile-select" onchange="switchProfile(this.value)"
+                        title="Active config profile"></select>
+                <button class="profile-btn" onclick="createProfile()" title="New profile">+</button>
+                <button class="profile-btn" onclick="renameProfile()" title="Rename active profile">✎</button>
+                <button class="profile-btn" onclick="deleteProfile()" title="Delete a profile">🗑</button>
+            </div>
             <div id="status-dot"></div>
             <span id="status-label">Checking…</span>
             <button id="btn-stop-all">■ Stop All</button>
@@ -993,6 +1038,10 @@
         let presets = [];
         let presetStatuses = {};
 
+        // Config profiles (per character/build/season).
+        let profileNames = [];
+        let activeProfile = '';
+
         // The thing currently in the editor.
         //   selectedKind: 'script' | 'preset' | null
         //   selected:     ScriptConfig or Preset object (always a deep copy)
@@ -1007,6 +1056,7 @@
 
         // ── Bootstrap ────────────────────────────────────────────────────────────────
         (async () => {
+            await loadProfiles();
             await loadScripts();
             await loadPresets();
             renderSidebar();
@@ -1027,6 +1077,105 @@
                 const r = await fetch(`${API}/presets`);
                 presets = await r.json();
             } catch { presets = []; }
+        }
+
+        // ── Profiles ───────────────────────────────────────────────────────────────────
+        async function loadProfiles() {
+            try {
+                const r = await fetch(`${API}/profiles`);
+                const data = await r.json();
+                profileNames = data.profiles || [];
+                activeProfile = data.active || '';
+            } catch { profileNames = []; activeProfile = ''; }
+            renderProfileSelect();
+        }
+
+        function renderProfileSelect() {
+            const sel = document.getElementById('profile-select');
+            if (!sel) return;
+            sel.innerHTML = profileNames.map(n =>
+                `<option value="${esc(n)}"${n === activeProfile ? ' selected' : ''}>${esc(n)}</option>`
+            ).join('');
+        }
+
+        // Switch active profile: the server stops running scripts and loads the new
+        // config, so we reload every list and clear the editor.
+        async function switchProfile(name) {
+            if (!name || name === activeProfile) return;
+            try {
+                const r = await fetch(`${API}/profiles/${encodeURIComponent(name)}/activate`, { method: 'POST' });
+                if (!r.ok) { toast(await r.text(), 'error'); await loadProfiles(); return; }
+                await loadProfiles();
+                await loadScripts();
+                await loadPresets();
+                renderSidebar();
+                showNoScript();
+                toast(`Switched to profile "${name}"`);
+            } catch (e) {
+                toast('Switch failed: ' + e.message, 'error');
+                await loadProfiles();   // reset the dropdown to the real active profile
+            }
+        }
+
+        async function createProfile() {
+            const name = prompt('New profile name:');
+            if (name === null) return;
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            const copyFromCurrent = confirm(
+                `Copy scripts + presets from the current profile ("${activeProfile}") into "${trimmed}"?\n\n` +
+                `OK = copy (recommended for a new season of the same build)\n` +
+                `Cancel = start empty`);
+            try {
+                const r = await fetch(`${API}/profiles`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: trimmed, copyFromCurrent })
+                });
+                if (!r.ok) { toast(await r.text(), 'error'); return; }
+                await loadProfiles();
+                toast(`Profile "${trimmed}" created — pick it from the dropdown to switch`);
+            } catch (e) { toast('Create failed: ' + e.message, 'error'); }
+        }
+
+        async function renameProfile() {
+            const current = activeProfile;
+            const name = prompt(`Rename the active profile "${current}" to:`, current);
+            if (name === null) return;
+            const trimmed = name.trim();
+            if (!trimmed || trimmed === current) return;
+            try {
+                const r = await fetch(`${API}/profiles/${encodeURIComponent(current)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ newName: trimmed })
+                });
+                if (!r.ok) { toast(await r.text(), 'error'); return; }
+                await loadProfiles();
+                toast(`Renamed to "${trimmed}"`);
+            } catch (e) { toast('Rename failed: ' + e.message, 'error'); }
+        }
+
+        async function deleteProfile() {
+            const others = profileNames.filter(n => n !== activeProfile);
+            if (others.length === 0) {
+                toast('The active profile cannot be deleted, and there is no other profile.', 'error');
+                return;
+            }
+            const name = prompt(
+                `Delete which profile?\nAvailable: ${others.join(', ')}\n` +
+                `(The active profile "${activeProfile}" cannot be deleted.)`);
+            if (name === null) return;
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            if (!confirm(`Permanently delete profile "${trimmed}" and its scripts + presets? This cannot be undone.`))
+                return;
+            try {
+                const r = await fetch(`${API}/profiles/${encodeURIComponent(trimmed)}`, { method: 'DELETE' });
+                if (!r.ok) { toast(await r.text(), 'error'); return; }
+                await loadProfiles();
+                toast(`Deleted profile "${trimmed}"`);
+            } catch (e) { toast('Delete failed: ' + e.message, 'error'); }
         }
 
         async function pollStatus() {

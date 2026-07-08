@@ -91,18 +91,32 @@ All under `/api/[controller]`; full schema in Swagger at `/swagger`.
 | `/api/engine/status`, `/api/engine/stop-all` | Aggregate status; emergency stop |
 | `/api/overlay/settings`, `/api/overlay/screens` | Overlay placement + monitor list |
 | `/api/screen/color`, `/api/screen/cursor` | Pixel/cursor sampling for pixel-trigger setup |
+| `/api/profiles` (list, create, `/{name}/activate`, rename, delete) | Named config profiles (per character/build/season) |
 
 ## Configuration & data
 
-All configuration lives in three JSON files, stored in `C:\temp` by default:
+Configuration lives in JSON files stored under `C:\temp` by default:
 
 | File | Contents |
 |------|----------|
-| `scripts.json` | Script definitions (trigger key, steps, delays, pixel trigger) |
-| `presets.json` | Preset definitions (trigger key, member scripts) |
-| `overlay-settings.json` | Overlay placement and style |
+| `profiles/<name>/scripts.json` | Script definitions (trigger key, steps, delays, pixel trigger) — per profile |
+| `profiles/<name>/presets.json` | Preset definitions (trigger key, member scripts) — per profile |
+| `profiles.json` | Which profile is active |
+| `overlay-settings.json` | Overlay placement and style — **global** (shared by all profiles) |
 
-The location is configurable in `appsettings.json` via `BestInScript:DataDirectory` (or per-file with `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`). Everything reloads on startup; if the app crashes or closes, held keys are released.
+### Profiles
+
+A **profile** is a named config set (per character / build / season) switchable from the
+dropdown in the header. Each profile is its own `profiles/<name>/` folder holding one
+`scripts.json` + `presets.json`; switching stops any running scripts and loads that profile's
+config. Creating a profile can **copy the current one** as a starting point — the usual new-season
+flow is *copy last season → re-capture each skill's pixel color* (the build structure and trigger
+keys carry over). Overlay placement is a display preference, so it stays global.
+
+On first run after upgrading, any pre-profiles `scripts.json` / `presets.json` sitting directly
+in the data directory are **automatically migrated** into a `Default` profile — no manual step.
+
+The location is configurable in `appsettings.json` via `BestInScript:DataDirectory`. Everything reloads on startup; if the app crashes or closes, held keys are released.
 
 ## Versioning
 

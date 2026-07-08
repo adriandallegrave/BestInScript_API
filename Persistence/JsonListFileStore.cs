@@ -31,8 +31,24 @@ namespace BestInScript.API.Persistence
             EnsureDirectory(FilePath);
         }
 
-        /// <summary>Fully resolved path of the backing JSON file.</summary>
-        public string FilePath { get; }
+        /// <summary>Fully resolved path of the backing JSON file. May be repointed
+        /// at runtime by <see cref="SetFilePath"/> when the active profile changes.</summary>
+        public string FilePath { get; private set; }
+
+        /// <summary>
+        /// Swap the backing file (used by <see cref="ProfileManager"/> on a profile
+        /// switch). Takes the same lock as reads/writes so no operation sees a half-set
+        /// path, and ensures the new directory exists. There is no cached list to reload —
+        /// every op re-reads the file — so repointing is just swapping the path.
+        /// </summary>
+        protected void SetFilePath(string path)
+        {
+            lock (_lock)
+            {
+                FilePath = path;
+                EnsureDirectory(FilePath);
+            }
+        }
 
         /// <summary>Identity selector used for upsert and delete.</summary>
         protected abstract Guid GetId(T item);

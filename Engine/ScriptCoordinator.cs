@@ -225,6 +225,26 @@ namespace BestInScript.API.Engine
                 StopEntry(entry);
         }
 
+        /// <summary>
+        /// Drop every registration entirely: stop all runs, clear owners, and empty
+        /// both registries. Used when switching profiles, before the new profile's
+        /// scripts/presets are loaded. Unlike <see cref="StopAll"/> this also removes
+        /// the entries themselves so a different config can be loaded cleanly.
+        /// </summary>
+        public void ClearAll()
+        {
+            lock (_toggleLock)
+            {
+                foreach (var entry in _scriptRegistry.Values)
+                {
+                    entry.Owners.Clear();
+                    StopEntry(entry);
+                }
+                _scriptRegistry.Clear();
+                _presetRegistry.Clear();
+            }
+        }
+
         // ── Key routing ────────────────────────────────────────────────────────
 
         /// <summary>

@@ -29,5 +29,20 @@ namespace BestInScript.API.Persistence
 
             return Path.GetFullPath(Path.Combine(directory, fileName));
         }
+
+        /// <summary>
+        /// The base data directory: <c>BestInScript:DataDirectory</c> if set,
+        /// otherwise <see cref="AppContext.BaseDirectory"/>. This is the folder
+        /// under which <see cref="ProfileManager"/> creates the <c>profiles/</c>
+        /// tree and stores the active-profile pointer.
+        /// </summary>
+        public static string ResolveBaseDirectory(IConfiguration config)
+        {
+            var dataDir = config["BestInScript:DataDirectory"];
+            var directory = string.IsNullOrWhiteSpace(dataDir)
+                ? AppContext.BaseDirectory
+                : dataDir;
+            return Path.GetFullPath(directory);
+        }
     }
 }

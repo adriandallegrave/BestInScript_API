@@ -12,7 +12,7 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.2.0** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.3.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
@@ -32,15 +32,15 @@ Sources are grouped in folders whose names match their namespaces (`BestInScript
 | Input synthesis (`SendInput`, key-name→VK map) | `Services/InputSimulatorService.cs` + `IInputSimulator.cs`; key catalog `Services/KeyNames.cs` |
 | Pixel reading (GDI, color distance) | `Services/ScreenColorService.cs` + `IScreenSampler.cs` |
 | Validation (shared by both controllers) | `Services/ConfigValidator.cs` |
-| Controllers | `Controllers/` — `ScriptsController.cs`, `PresetsController.cs`, `EngineController.cs`, `OverlayController.cs`, `ScreenController.cs` |
+| Controllers | `Controllers/` — `ScriptsController.cs`, `PresetsController.cs`, `EngineController.cs`, `OverlayController.cs`, `ScreenController.cs`, `ProfilesController.cs` |
 | Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs` |
-| Persistence | `Persistence/` — `JsonListFileStore.cs` (generic base), `ScriptRepository.cs`, `PresetRepository.cs`, `OverlaySettingsStore.cs`, `DataFilePathResolver.cs`, `IScriptRepository.cs`, `IPresetRepository.cs` |
+| Persistence | `Persistence/` — `JsonListFileStore.cs` (generic base), `ScriptRepository.cs`, `PresetRepository.cs`, `OverlaySettingsStore.cs`, `DataFilePathResolver.cs`, `ProfileManager.cs` (+ `IProfileScopedStore.cs`), `IScriptRepository.cs`, `IPresetRepository.cs` |
 | Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)`, `OverlayHostedService.cs` |
 | Tray icon | `Tray/TrayIconHostedService.cs` — NotifyIcon on dedicated STA thread (open UI / stop-all / exit) |
 | Tests | `BestInScript.Tests/` — xUnit, one file per subject; hand-rolled fakes in `Fakes/` |
 | Web UI | `wwwroot/index.html` (+ `overlay-settings-panel.html`, manually pasted in); app icon `wwwroot/app.ico` (tray + favicon + exe), located at runtime by `Services/WebAssetLocator.cs` |
 | Config | `appsettings.json` (`BestInScript:DataDirectory` → `C:\temp`) |
-| Data (runtime) | `C:\temp\scripts.json`, `presets.json`, `overlay-settings.json` |
+| Data (runtime) | `C:\temp\profiles\<name>\scripts.json` + `presets.json` (per profile), `C:\temp\profiles.json` (active pointer), `C:\temp\overlay-settings.json` (global) |
 
 ## Commands
 
@@ -138,7 +138,8 @@ The live verdict surfaces to the overlay via `PixelOverlayState` (`NotApplicable
 | `ScriptCoordinator`    | Script/preset registries keyed by VK, ownership model, `_toggleLock`, per-script `CancellationTokenSource`. |
 | `ScriptExecutor` (`IScriptRunner`) | Blind-loop / pixel-gated run loops + step executor with the mandatory randomized delays. |
 | `HotkeyEngine`         | `IHostedService` façade: loads repos, wires hook → coordinator, delegates the public API. |
-| `OverlaySettingsStore` | Holds + persists overlay settings (`overlay-settings.json`). Fires `Changed` event on save. |
+| `OverlaySettingsStore` | Holds + persists overlay settings (`overlay-settings.json`). Fires `Changed` event on save. Global — NOT profile-scoped. |
+| `ProfileManager` | Owns the named config profiles and the active pointer. Migrates legacy files into a `Default` profile, then repoints the profile-scoped stores (`IProfileScopedStore`: the two repos) at the active `profiles/<name>/` dir. `HotkeyEngine.SwitchProfile` calls `ClearAll` → `Activate` → reload. |
 | `OverlayHostedService` | `IHostedService`. Spins up `OverlayWindow` (WPF) on a dedicated STA thread. |
 | `TrayIconHostedService` | `IHostedService`. System-tray `NotifyIcon` on a dedicated STA thread; menu: open UI, stop-all, exit. Resolves the UI URL lazily from `IServerAddressesFeature`. |
 
@@ -155,6 +156,7 @@ All controllers are under `/api/[controller]`. Swagger UI at `/swagger`.
 | `/api/engine/status`, `/api/engine/stop-all`         | Aggregate script status; emergency stop. |
 | `/api/overlay/settings`, `/api/overlay/screens`      | Overlay placement + monitor enumeration (`System.Windows.Forms.Screen`). |
 | `/api/screen/color`, `/api/screen/cursor`            | Pixel + cursor-position sampling used by the config UI. |
+| `/api/profiles` (list, create, `/{name}/activate`, rename, delete) | Named config profiles. `activate` routes through `HotkeyEngine.SwitchProfile` (stops runs, repoints stores, reloads). |
 
 ### Overlay
 
@@ -175,11 +177,11 @@ Static `wwwroot/index.html` served directly (no static-file middleware — a man
 
 ### Data files
 
-Three JSON files: `scripts.json`, `presets.json`, `overlay-settings.json`.
+Per-profile: `profiles/<name>/scripts.json` + `profiles/<name>/presets.json`. Global: `overlay-settings.json` (at the base dir) and `profiles.json` (the active-profile pointer).
 
-Path resolution (`DataFilePathResolver.Resolve`, used by all three stores):
-1. If `BestInScript:<SpecificKey>` is set **and absolute** → used verbatim.
-2. Otherwise the directory is `BestInScript:DataDirectory` (or `AppContext.BaseDirectory` if unset), and the filename is the SpecificKey value if set or the default (`scripts.json` / `presets.json`).
+`ProfileManager` computes the base dir from `DataFilePathResolver.ResolveBaseDirectory` (`BestInScript:DataDirectory` or `AppContext.BaseDirectory`) and, at startup + on every switch, calls `Rebind` on each `IProfileScopedStore` (the two repos) to point it at `<base>/profiles/<active>/<file>`. The two repos implement `IProfileScopedStore`; `OverlaySettingsStore` does not (it stays at the base dir, still via `DataFilePathResolver.Resolve`). **Migration:** on first run after upgrade, loose `scripts.json`/`presets.json` in the base dir are moved into a `Default` profile.
+
+The stores are registered as concrete singletons in `Program.cs` with their interfaces forwarded to the same instance, so `ProfileManager` repoints the exact stores that controllers, the validator, and the engine all use. `DataFilePathResolver.Resolve`'s absolute per-file overrides (`BestInScript:DataFilePath` etc.) still set each store's *initial* path but are superseded once `ProfileManager` rebinds to the active profile.
 
 Config keys: `BestInScript:DataDirectory`, `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`. The default `appsettings.json` ships `DataDirectory: C:\temp`.
 

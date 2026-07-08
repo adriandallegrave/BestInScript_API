@@ -19,8 +19,16 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddSingleton<IScriptRepository, ScriptRepository>();
-builder.Services.AddSingleton<IPresetRepository, PresetRepository>();
+// Repos are registered as concrete singletons and their interfaces forwarded to the
+// same instance, so ProfileManager (via IProfileScopedStore) repoints the exact stores
+// that controllers, the validator, and the engine all use.
+builder.Services.AddSingleton<ScriptRepository>();
+builder.Services.AddSingleton<IScriptRepository>(sp => sp.GetRequiredService<ScriptRepository>());
+builder.Services.AddSingleton<IProfileScopedStore>(sp => sp.GetRequiredService<ScriptRepository>());
+builder.Services.AddSingleton<PresetRepository>();
+builder.Services.AddSingleton<IPresetRepository>(sp => sp.GetRequiredService<PresetRepository>());
+builder.Services.AddSingleton<IProfileScopedStore>(sp => sp.GetRequiredService<PresetRepository>());
+builder.Services.AddSingleton<ProfileManager>();
 builder.Services.AddSingleton<IInputSimulator, InputSimulatorService>();
 builder.Services.AddSingleton<IScreenSampler, ScreenColorService>();
 builder.Services.AddSingleton<IDelayScheduler, TaskDelayScheduler>();

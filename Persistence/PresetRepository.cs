@@ -7,7 +7,7 @@ namespace BestInScript.API.Persistence
     /// default), resolved against BestInScript:DataDirectory just like
     /// scripts.json.
     /// </summary>
-    public class PresetRepository : JsonListFileStore<Preset>, IPresetRepository
+    public class PresetRepository : JsonListFileStore<Preset>, IPresetRepository, IProfileScopedStore
     {
         private const string DefaultFileName = "presets.json";
 
@@ -19,5 +19,9 @@ namespace BestInScript.API.Persistence
         }
 
         protected override Guid GetId(Preset item) => item.Id;
+
+        // ── IProfileScopedStore ──────────────────────────────────────────────
+        public string ProfileFileName => DefaultFileName;
+        public void Rebind(string absolutePath) => SetFilePath(absolutePath);
     }
 }
