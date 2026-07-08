@@ -10,6 +10,9 @@
 		     Debug keeps the console so dev logs stay visible. -->
 		<OutputType Condition="'$(Configuration)' == 'Release'">WinExe</OutputType>
 
+		<!-- Embedded into the exe: Explorer / Start-menu shortcut icon. -->
+		<ApplicationIcon>wwwroot\app.ico</ApplicationIcon>
+
 		<!-- WPF for the on-screen overlay, WinForms for System.Windows.Forms.Screen
 		     and the system-tray NotifyIcon -->
 		<UseWPF>true</UseWPF>

@@ -52,19 +52,10 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// Serve index.html from wwwroot folder next to the project file.
-// AppContext.BaseDirectory points to bin\Debug\net10.0\ at runtime,
-// so we walk up to the project root (where wwwroot lives).
+// Serve index.html from wwwroot (no static-file middleware; see WebAssetLocator).
 app.MapGet("/", async (HttpContext ctx) =>
 {
-    // Try project root first (dotnet run), then beside the exe (published)
-    var candidates = new[]
-    {
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "wwwroot", "index.html"),
-        Path.Combine(AppContext.BaseDirectory, "wwwroot", "index.html"),
-    };
-
-    var path = candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+    var path = WebAssetLocator.Find("index.html");
     if (path is null)
     {
         ctx.Response.StatusCode = 404;
@@ -74,6 +65,21 @@ app.MapGet("/", async (HttpContext ctx) =>
     }
 
     ctx.Response.ContentType = "text/html; charset=utf-8";
+    await ctx.Response.SendFileAsync(path);
+});
+
+// Browser-tab icon, requested automatically by browsers and referenced
+// explicitly by index.html's <link rel="icon">.
+app.MapGet("/favicon.ico", async (HttpContext ctx) =>
+{
+    var path = WebAssetLocator.Find("app.ico");
+    if (path is null)
+    {
+        ctx.Response.StatusCode = 404;
+        return;
+    }
+
+    ctx.Response.ContentType = "image/x-icon";
     await ctx.Response.SendFileAsync(path);
 });
 

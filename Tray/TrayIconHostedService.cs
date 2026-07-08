@@ -130,6 +130,15 @@ namespace BestInScript.API.Tray
         {
             try
             {
+                // app.ico ships multiple sizes; pick the one matching the
+                // tray's (DPI-scaled) small-icon size so it renders crisp.
+                if (Services.WebAssetLocator.Find("app.ico") is { } path)
+                    return new Icon(path, SystemInformation.SmallIconSize);
+            }
+            catch { /* fall through to the exe icon */ }
+
+            try
+            {
                 var exe = Environment.ProcessPath;
                 if (exe is not null && Icon.ExtractAssociatedIcon(exe) is { } extracted)
                     return extracted;
