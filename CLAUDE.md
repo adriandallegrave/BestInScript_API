@@ -36,6 +36,7 @@ Sources are grouped in folders whose names match their namespaces (`BestInScript
 | Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs` |
 | Persistence | `Persistence/` — `JsonListFileStore.cs` (generic base), `ScriptRepository.cs`, `PresetRepository.cs`, `OverlaySettingsStore.cs`, `DataFilePathResolver.cs`, `IScriptRepository.cs`, `IPresetRepository.cs` |
 | Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)`, `OverlayHostedService.cs` |
+| Tray icon | `Tray/TrayIconHostedService.cs` — NotifyIcon on dedicated STA thread (open UI / stop-all / exit) |
 | Tests | `BestInScript.Tests/` — xUnit, one file per subject; hand-rolled fakes in `Fakes/` |
 | Web UI | `wwwroot/index.html` (+ `overlay-settings-panel.html`, manually pasted in) |
 | Config | `appsettings.json` (`BestInScript:DataDirectory` → `C:\temp`) |
@@ -58,7 +59,7 @@ dotnet test
 dotnet publish -c Release -r win-x64 --self-contained
 ```
 
-The **published exe** (the user's real usage — a Start-menu shortcut) has no URL config, so it serves on Kestrel's default **http://localhost:5000**. The root-level `launchSettings.json` (port 5238) is dead — tooling only reads `Properties/launchSettings.json`.
+The **published exe** (the user's real usage — a Start-menu shortcut) has no URL config, so it serves on Kestrel's default **http://localhost:5000**. Release builds are `WinExe` (conditional `OutputType` in the csproj): no console window, the tray icon is the only shell UI; Debug keeps the console for dev logs. The root-level `launchSettings.json` (port 5238) is dead — tooling only reads `Properties/launchSettings.json`.
 
 Tests are pure unit tests over the DI seams (fakes for input, delays, randomness, screen, runner) — no Win32 is touched and no app instance is started. No linter is configured.
 
@@ -139,6 +140,7 @@ The live verdict surfaces to the overlay via `PixelOverlayState` (`NotApplicable
 | `HotkeyEngine`         | `IHostedService` façade: loads repos, wires hook → coordinator, delegates the public API. |
 | `OverlaySettingsStore` | Holds + persists overlay settings (`overlay-settings.json`). Fires `Changed` event on save. |
 | `OverlayHostedService` | `IHostedService`. Spins up `OverlayWindow` (WPF) on a dedicated STA thread. |
+| `TrayIconHostedService` | `IHostedService`. System-tray `NotifyIcon` on a dedicated STA thread; menu: open UI, stop-all, exit. Resolves the UI URL lazily from `IServerAddressesFeature`. |
 
 Testing seams (`IInputSimulator`, `IScreenSampler`, `IDelayScheduler`, `IRandomSource`, `IScriptRunner`, the repo interfaces) each have exactly one production implementation; tests swap in hand-rolled fakes from `BestInScript.Tests/Fakes/`. `TaskDelayScheduler` and `SharedRandomSource` forward to `Task.Delay` / `Random.Shared`, so production timing is unchanged.
 

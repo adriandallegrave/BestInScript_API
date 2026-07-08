@@ -2,6 +2,7 @@ using BestInScript.API.Engine;
 using BestInScript.API.Overlay;
 using BestInScript.API.Persistence;
 using BestInScript.API.Services;
+using BestInScript.API.Tray;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,6 +38,10 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
 // Both are required — without the hosted service no overlay is created on screen.
 builder.Services.AddSingleton<OverlaySettingsStore>();
 builder.Services.AddHostedService<OverlayHostedService>();
+
+// ── System tray icon ───────────────────────────────────────────────────────
+// Quick actions while the app runs in the background: open UI, stop-all, exit.
+builder.Services.AddHostedService<TrayIconHostedService>();
 
 var app = builder.Build();
 

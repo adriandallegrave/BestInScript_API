@@ -6,7 +6,12 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-		<!-- WPF for the on-screen overlay, WinForms only for System.Windows.Forms.Screen -->
+		<!-- Release builds run without a console window (tray-only);
+		     Debug keeps the console so dev logs stay visible. -->
+		<OutputType Condition="'$(Configuration)' == 'Release'">WinExe</OutputType>
+
+		<!-- WPF for the on-screen overlay, WinForms for System.Windows.Forms.Screen
+		     and the system-tray NotifyIcon -->
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
 	</PropertyGroup>

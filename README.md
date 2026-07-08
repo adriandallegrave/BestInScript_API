@@ -19,6 +19,7 @@ This tool replaces *repetitive* keystrokes, not skill. Its design deliberately f
 - **Pixel-gated autocast** — a script can watch one screen pixel (e.g. a skill icon) and only fire when it reads as "ready", using a two-color ready/cooldown comparison that is robust to lighting drift.
 - **Overlay** — a topmost, click-through pill showing which scripts/presets are active and the live pixel state (`READY` / `waiting` / `unreadable`).
 - **Web UI + REST API** — configure everything in the browser; Swagger UI available for the raw API.
+- **Tray icon** — the published app runs without a console window; a system-tray icon offers quick actions: open the web UI (also on double-click), stop all scripts, exit.
 
 ## Requirements
 
@@ -36,8 +37,8 @@ This tool replaces *repetitive* keystrokes, not skill. Its design deliberately f
    ```
 
 2. Create a shortcut to the published exe (e.g. pin it to the Start menu).
-3. Launch it — the server starts at **http://localhost:5000**.
-4. Open that address in a browser to configure scripts, presets, and the overlay. Swagger UI is at `/swagger`.
+3. Launch it — no console window opens; a tray icon appears and the server starts at **http://localhost:5000**.
+4. Double-click the tray icon (or open that address in a browser) to configure scripts, presets, and the overlay. Swagger UI is at `/swagger`. The tray icon's right-click menu also offers **Stop all scripts** and **Exit**.
 
 For development, `dotnet run` serves on the ports from `Properties/launchSettings.json` (https 57997 / http 57998) instead.
 
