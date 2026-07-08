@@ -12,17 +12,17 @@ namespace BestInScript.API.Controllers
     public class PresetsController : ControllerBase
     {
         private readonly PresetRepository _presetRepo;
-        private readonly ScriptRepository _scriptRepo;
         private readonly HotkeyEngine _engine;
+        private readonly ConfigValidator _validator;
 
         public PresetsController(
             PresetRepository presetRepo,
-            ScriptRepository scriptRepo,
-            HotkeyEngine engine)
+            HotkeyEngine engine,
+            ConfigValidator validator)
         {
             _presetRepo = presetRepo;
-            _scriptRepo = scriptRepo;
             _engine = engine;
+            _validator = validator;
         }
 
         // GET /api/presets
@@ -47,8 +47,8 @@ namespace BestInScript.API.Controllers
         [HttpPost]
         public ActionResult<Preset> Create([FromBody] Preset preset)
         {
-            var validation = ValidatePreset(preset, isUpdate: false);
-            if (validation is not null) return validation;
+            var error = _validator.ValidatePreset(preset);
+            if (error is not null) return BadRequest(error);
 
             preset.Id = Guid.NewGuid();
             _presetRepo.Save(preset);
@@ -65,8 +65,8 @@ namespace BestInScript.API.Controllers
                 return NotFound();
 
             preset.Id = id;
-            var validation = ValidatePreset(preset, isUpdate: true);
-            if (validation is not null) return validation;
+            var error = _validator.ValidatePreset(preset);
+            if (error is not null) return BadRequest(error);
 
             _presetRepo.Save(preset);
             _engine.RegisterPreset(preset); // re-registers (deactivates old, installs new)
@@ -83,50 +83,6 @@ namespace BestInScript.API.Controllers
 
             _engine.UnregisterPreset(id);
             return NoContent();
-        }
-
-        // ── Validation ─────────────────────────────────────────────────────────
-
-        private ActionResult? ValidatePreset(Preset preset, bool isUpdate)
-        {
-            if (string.IsNullOrWhiteSpace(preset.Name))
-                return BadRequest("Preset name is required.");
-
-            if (!InputSimulatorService.IsValidTriggerKey(preset.TriggerKey))
-                return BadRequest(
-                    $"Invalid trigger key '{preset.TriggerKey}'. " +
-                    "Must be a keyboard key (not a mouse button).");
-
-            // Trigger key cannot collide with any script's trigger.
-            var triggerCollision = _scriptRepo.GetAll()
-                .FirstOrDefault(s => string.Equals(
-                    s.TriggerKey, preset.TriggerKey, StringComparison.OrdinalIgnoreCase));
-            if (triggerCollision != null)
-                return BadRequest(
-                    $"Trigger key '{preset.TriggerKey}' is already used by script '{triggerCollision.Name}'. " +
-                    "Pick a different key.");
-
-            // …or any other preset's trigger.
-            var presetCollision = _presetRepo.GetAll()
-                .FirstOrDefault(p => p.Id != preset.Id
-                    && string.Equals(p.TriggerKey, preset.TriggerKey, StringComparison.OrdinalIgnoreCase));
-            if (presetCollision != null)
-                return BadRequest(
-                    $"Trigger key '{preset.TriggerKey}' is already used by preset '{presetCollision.Name}'. " +
-                    "Pick a different key.");
-
-            // Every referenced script id must exist.
-            var existingIds = _scriptRepo.GetAll().Select(s => s.Id).ToHashSet();
-            var unknown = preset.ScriptIds.Where(id => !existingIds.Contains(id)).ToList();
-            if (unknown.Count > 0)
-                return BadRequest(
-                    $"Preset references {unknown.Count} script id(s) that no longer exist: " +
-                    string.Join(", ", unknown));
-
-            // Deduplicate member ids while preserving order.
-            preset.ScriptIds = preset.ScriptIds.Distinct().ToList();
-
-            return null;
         }
     }
 }

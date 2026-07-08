@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <!-- Same WindowsDesktop implicit-usings quirk as the app csproj. -->
+    <Using Include="System.IO" />
   </ItemGroup>
 
 </Project>

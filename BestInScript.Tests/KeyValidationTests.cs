@@ -41,4 +41,20 @@ public class KeyValidationTests
         Assert.False(InputSimulatorService.IsValidKey(key));
         Assert.False(InputSimulatorService.IsValidTriggerKey(key));
     }
+
+    [Fact]
+    public void AllKeyNames_AreValidKeys()
+    {
+        foreach (var name in KeyNames.All())
+            Assert.True(InputSimulatorService.IsValidKey(name),
+                $"Catalog key '{name}' does not resolve as a valid key.");
+    }
+
+    [Fact]
+    public void AllNonMouseKeyNames_AreValidTriggerKeys()
+    {
+        foreach (var name in KeyNames.All().Where(n => !n.StartsWith("Mouse")))
+            Assert.True(InputSimulatorService.IsValidTriggerKey(name),
+                $"Catalog key '{name}' is not accepted as a trigger key.");
+    }
 }

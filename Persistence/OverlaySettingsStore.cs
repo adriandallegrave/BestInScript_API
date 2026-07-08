@@ -1,6 +1,5 @@
-using System.IO;
 using System.Text.Json;
-using BestInScript.API.Overlay;
+using BestInScript.API.Models;
 
 namespace BestInScript.API.Persistence
 {
@@ -34,7 +33,7 @@ namespace BestInScript.API.Persistence
             ILogger<OverlaySettingsStore> logger)
         {
             _logger = logger;
-            _path = ScriptRepository.ResolveDataFilePath(
+            _path = DataFilePathResolver.Resolve(
                 config, "BestInScript:OverlaySettingsPath", DefaultFileName);
             EnsureDirectory(_path);
             _logger.LogInformation("Overlay settings file: {Path}", _path);

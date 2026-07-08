@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace BestInScript.API.Overlay
+namespace BestInScript.API.Models
 {
     /// <summary>
     /// 9-point anchor for the on-screen overlay box.

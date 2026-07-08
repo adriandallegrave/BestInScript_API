@@ -22,6 +22,7 @@ builder.Services.AddSingleton<ScriptRepository>();
 builder.Services.AddSingleton<PresetRepository>();
 builder.Services.AddSingleton<InputSimulatorService>();
 builder.Services.AddSingleton<ScreenColorService>();
+builder.Services.AddSingleton<ConfigValidator>();
 builder.Services.AddSingleton<HotkeyEngine>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
 
