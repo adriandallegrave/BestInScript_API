@@ -118,6 +118,7 @@ Every new feature ships with a description, a one-line commit message, a new row
 
 | Version | Date | Commit | Description |
 |---------|------------|---------|-------------|
+| 1.2.0 | 2026-07-08 | f02e944 | App icon (`wwwroot/app.ico`) shown in the tray, the browser tab (favicon), and the exe / Start-menu shortcut |
 | 1.1.0 | 2026-07-08 | 95f75d7 | Tray icon: published exe runs without a console window; tray menu offers open UI (also double-click), stop all scripts, exit |
 | 1.0.1 | 2026-07-08 | 9a82273 | Internal restructure: folderized layout, engine decomposed into focused classes, unit-test suite added — zero behavior change |
 | 1.0.0 | 2026-07-07 | eb615c5 | Baseline: scripts, presets, pixel-gated autocast, overlay, web UI |

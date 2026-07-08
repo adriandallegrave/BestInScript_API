@@ -12,7 +12,7 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.1.0** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.2.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
@@ -38,7 +38,7 @@ Sources are grouped in folders whose names match their namespaces (`BestInScript
 | Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)`, `OverlayHostedService.cs` |
 | Tray icon | `Tray/TrayIconHostedService.cs` — NotifyIcon on dedicated STA thread (open UI / stop-all / exit) |
 | Tests | `BestInScript.Tests/` — xUnit, one file per subject; hand-rolled fakes in `Fakes/` |
-| Web UI | `wwwroot/index.html` (+ `overlay-settings-panel.html`, manually pasted in) |
+| Web UI | `wwwroot/index.html` (+ `overlay-settings-panel.html`, manually pasted in); app icon `wwwroot/app.ico` (tray + favicon + exe), located at runtime by `Services/WebAssetLocator.cs` |
 | Config | `appsettings.json` (`BestInScript:DataDirectory` → `C:\temp`) |
 | Data (runtime) | `C:\temp\scripts.json`, `presets.json`, `overlay-settings.json` |
 
