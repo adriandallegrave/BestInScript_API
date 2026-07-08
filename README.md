@@ -117,6 +117,7 @@ Every new feature ships with a description, a one-line commit message, a new row
 
 | Version | Date | Commit | Description |
 |---------|------------|---------|-------------|
+| 1.0.1 | 2026-07-08 | 9a82273 | Internal restructure: folderized layout, engine decomposed into focused classes, unit-test suite added — zero behavior change |
 | 1.0.0 | 2026-07-07 | eb615c5 | Baseline: scripts, presets, pixel-gated autocast, overlay, web UI |
 | — | 2026-05-30 | cd77acd | Document presets, ownership model, REST surface |
 | — | 2026-05-17 | b607890 | Smarter overlay |
