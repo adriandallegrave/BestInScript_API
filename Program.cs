@@ -25,6 +25,9 @@ builder.Services.AddSingleton<IScreenSampler, ScreenColorService>();
 builder.Services.AddSingleton<IDelayScheduler, TaskDelayScheduler>();
 builder.Services.AddSingleton<IRandomSource, SharedRandomSource>();
 builder.Services.AddSingleton<ConfigValidator>();
+builder.Services.AddSingleton<IScriptRunner, ScriptExecutor>();
+builder.Services.AddSingleton<KeyboardHook>();
+builder.Services.AddSingleton<ScriptCoordinator>();
 builder.Services.AddSingleton<HotkeyEngine>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
 
