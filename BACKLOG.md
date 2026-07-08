@@ -18,7 +18,7 @@ The **#** column numbers each item (`section.item`); **Shipped** marks released 
 
 | # | Shipped | Feature | Description | Effort |
 |---|---------|---------|-------------|--------|
-| 2.1 | | **Capture wizard** | Single-sample capture already ships: 📍 sample-at-cursor with a 3 s countdown, plus separate "capture ready color" / "capture cooldown color" grabs — there is **no manual RGB entry**. Remaining work: a guided **in-game capture-hotkey** flow that walks ready→cooldown in two passes without alt-tabbing, and helps nudge the coordinate when the two colors are too close to tell apart (a real season pain point). | S |
+| 2.1 | ✅ 1.4.0 | **Capture wizard** | Single-sample capture already ships: 📍 sample-at-cursor with a 3 s countdown, plus separate "capture ready color" / "capture cooldown color" grabs — there is **no manual RGB entry**. Remaining work: a guided **in-game capture-hotkey** flow that walks ready→cooldown in two passes without alt-tabbing, and helps nudge the coordinate when the two colors are too close to tell apart (a real season pain point). | S |
 | 2.2 | | **Live tuning view** | Web UI panel streaming live `dReady` / `dCool` distances and the verdict, so `Tolerance` can be tuned against the real game. Reuses `PixelReadyEvaluator` math. (A basic live readout already exists; this extends it with the raw distances.) | M |
 | 2.3 | | **Dry-run mode** | Script flag: the evaluator runs and the overlay shows READY/waiting, but no keys are sent. Validate a trigger before trusting it mid-fight. | S |
 | 2.4 | | **Multi-pixel condition** | A script watches 2+ pixels with AND/OR logic (e.g. skill ready AND resource full). Extends `PixelTrigger` to a list — data-model change, likely a major version. | L |

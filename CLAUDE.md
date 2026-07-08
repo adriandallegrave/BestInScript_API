@@ -12,7 +12,7 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.3.0** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.4.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
@@ -31,6 +31,7 @@ Sources are grouped in folders whose names match their namespaces (`BestInScript
 | Engine | `Engine/` — `HotkeyEngine.cs` (hosted-service façade), `KeyboardHook.cs` (WH_KEYBOARD_LL thread + pump), `ScriptCoordinator.cs` (registries + ownership), `ScriptExecutor.cs` (run loops + step executor), `PixelReadyEvaluator.cs` (two-color ready rule), `ScriptEntry.cs` / `PresetEntry.cs`, seams `IScriptRunner.cs`, `IDelayScheduler.cs`, `IRandomSource.cs` |
 | Input synthesis (`SendInput`, key-name→VK map) | `Services/InputSimulatorService.cs` + `IInputSimulator.cs`; key catalog `Services/KeyNames.cs` |
 | Pixel reading (GDI, color distance) | `Services/ScreenColorService.cs` + `IScreenSampler.cs` |
+| Guided in-game capture (2-pass hotkey + coordinate nudge) | `Services/PixelCaptureService.cs` (armed via `ScriptCoordinator.HandleTriggerKey`; endpoints on `ScreenController`) |
 | Validation (shared by both controllers) | `Services/ConfigValidator.cs` |
 | Controllers | `Controllers/` — `ScriptsController.cs`, `PresetsController.cs`, `EngineController.cs`, `OverlayController.cs`, `ScreenController.cs`, `ProfilesController.cs` |
 | Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs` |
@@ -133,6 +134,7 @@ The live verdict surfaces to the overlay via `PixelOverlayState` (`NotApplicable
 | `PresetRepository` (`IPresetRepository`) | `presets.json` persistence — thin subclass of `JsonListFileStore<Preset>`. |
 | `InputSimulatorService` (`IInputSimulator`) | Win32 `SendInput` wrapper. Pure statics `ResolveVk` (key name → VK), `IsValidKey`, `IsValidTriggerKey` (rejects mouse buttons). |
 | `ScreenColorService` (`IScreenSampler`) | GDI pixel reader + static Euclidean `Distance` + cursor position. |
+| `PixelCaptureService`  | Guided in-game pixel capture (BACKLOG 2.1). Armed state machine consulted first in `ScriptCoordinator.HandleTriggerKey`; on the capture hotkey grabs ready then cooldown color at the cursor + a neighborhood grid, and recommends a nearby coordinate when the two colors are too close. Passive (reuses `IScreenSampler` + the passive hook). |
 | `ConfigValidator`      | Script/preset validation shared by both controllers; returns the exact 400 message or null. |
 | `KeyboardHook`         | WH_KEYBOARD_LL hook thread + message pump; raises `KeyPressed(vk)`; never suppresses keys. |
 | `ScriptCoordinator`    | Script/preset registries keyed by VK, ownership model, `_toggleLock`, per-script `CancellationTokenSource`. |
@@ -156,6 +158,7 @@ All controllers are under `/api/[controller]`. Swagger UI at `/swagger`.
 | `/api/engine/status`, `/api/engine/stop-all`         | Aggregate script status; emergency stop. |
 | `/api/overlay/settings`, `/api/overlay/screens`      | Overlay placement + monitor enumeration (`System.Windows.Forms.Screen`). |
 | `/api/screen/color`, `/api/screen/cursor`            | Pixel + cursor-position sampling used by the config UI. |
+| `/api/screen/capture/arm`, `/disarm`, `/state`       | Guided in-game capture: arm a hotkey, then two in-game presses grab ready/cooldown color + a coordinate-nudge suggestion; UI polls `/state`. |
 | `/api/profiles` (list, create, `/{name}/activate`, rename, delete) | Named config profiles. `activate` routes through `HotkeyEngine.SwitchProfile` (stops runs, repoints stores, reloads). |
 
 ### Overlay

@@ -132,6 +132,7 @@ Every new feature ships with a description, a one-line commit message, a new row
 
 | Version | Date | Commit | Description |
 |---------|------------|---------|-------------|
+| 1.4.0 | 2026-07-08 | 575fe04 | Guided in-game capture: arm a hotkey, then two in-game presses grab the ready then cooldown color at the cursor (no alt-tabbing back to the browser); each pass scans a small neighborhood and, when the two colors are too close to tell apart, suggests a nearby pixel that separates them better — passive GDI reads + the existing keyboard hook, no synthetic input |
 | 1.3.0 | 2026-07-08 | 406b8fc | Profiles: named per-character/build/season config sets switchable from the header dropdown (`profiles/<name>/`), with copy-current for season rollover; existing files auto-migrate into a Default profile; overlay settings stay global |
 | 1.2.0 | 2026-07-08 | f02e944 | App icon (`wwwroot/app.ico`) shown in the tray, the browser tab (favicon), and the exe / Start-menu shortcut |
 | 1.1.0 | 2026-07-08 | 95f75d7 | Tray icon: published exe runs without a console window; tray menu offers open UI (also double-click), stop all scripts, exit |
