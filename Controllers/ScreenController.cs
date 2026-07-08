@@ -12,9 +12,9 @@ namespace BestInScript.API.Controllers
     [Route("api/screen")]
     public class ScreenController : ControllerBase
     {
-        private readonly ScreenColorService _screen;
+        private readonly IScreenSampler _screen;
 
-        public ScreenController(ScreenColorService screen) => _screen = screen;
+        public ScreenController(IScreenSampler screen) => _screen = screen;
 
         /// <summary>
         /// Color at a screen coordinate. Optional radius averages a square

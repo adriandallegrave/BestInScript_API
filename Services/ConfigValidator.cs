@@ -10,10 +10,10 @@ namespace BestInScript.API.Services
     /// </summary>
     public sealed class ConfigValidator
     {
-        private readonly ScriptRepository _scriptRepo;
-        private readonly PresetRepository _presetRepo;
+        private readonly IScriptRepository _scriptRepo;
+        private readonly IPresetRepository _presetRepo;
 
-        public ConfigValidator(ScriptRepository scriptRepo, PresetRepository presetRepo)
+        public ConfigValidator(IScriptRepository scriptRepo, IPresetRepository presetRepo)
         {
             _scriptRepo = scriptRepo;
             _presetRepo = presetRepo;

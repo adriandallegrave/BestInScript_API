@@ -19,7 +19,7 @@ namespace BestInScript.API.Services
     /// in true fullscreen-EXCLUSIVE mode. Fullscreen-borderless and windowed
     /// modes both work correctly — most ARPGs default to borderless.
     /// </summary>
-    public class ScreenColorService
+    public class ScreenColorService : IScreenSampler
     {
         [DllImport("user32.dll")]
         private static extern IntPtr GetDC(IntPtr hWnd);

@@ -11,12 +11,12 @@ namespace BestInScript.API.Controllers
     [Produces("application/json")]
     public class PresetsController : ControllerBase
     {
-        private readonly PresetRepository _presetRepo;
+        private readonly IPresetRepository _presetRepo;
         private readonly HotkeyEngine _engine;
         private readonly ConfigValidator _validator;
 
         public PresetsController(
-            PresetRepository presetRepo,
+            IPresetRepository presetRepo,
             HotkeyEngine engine,
             ConfigValidator validator)
         {

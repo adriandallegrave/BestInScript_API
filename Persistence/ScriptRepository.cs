@@ -9,7 +9,7 @@ namespace BestInScript.API.Persistence
     /// auto-created at startup so a fresh path like C:\temp works even if the
     /// folder doesn't exist yet.
     /// </summary>
-    public class ScriptRepository : JsonListFileStore<ScriptConfig>
+    public class ScriptRepository : JsonListFileStore<ScriptConfig>, IScriptRepository
     {
         private const string DefaultFileName = "scripts.json";
 

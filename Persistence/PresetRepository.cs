@@ -7,7 +7,7 @@ namespace BestInScript.API.Persistence
     /// default), resolved against BestInScript:DataDirectory just like
     /// scripts.json.
     /// </summary>
-    public class PresetRepository : JsonListFileStore<Preset>
+    public class PresetRepository : JsonListFileStore<Preset>, IPresetRepository
     {
         private const string DefaultFileName = "presets.json";
 

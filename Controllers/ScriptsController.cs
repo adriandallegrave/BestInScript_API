@@ -11,12 +11,12 @@ namespace BestInScript.API.Controllers
     [Produces("application/json")]
     public class ScriptsController : ControllerBase
     {
-        private readonly ScriptRepository _repo;
-        private readonly HotkeyEngine     _engine;
-        private readonly ConfigValidator  _validator;
+        private readonly IScriptRepository _repo;
+        private readonly HotkeyEngine      _engine;
+        private readonly ConfigValidator   _validator;
 
         public ScriptsController(
-            ScriptRepository repo,
+            IScriptRepository repo,
             HotkeyEngine engine,
             ConfigValidator validator)
         {

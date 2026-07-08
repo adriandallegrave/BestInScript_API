@@ -18,10 +18,12 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddSingleton<ScriptRepository>();
-builder.Services.AddSingleton<PresetRepository>();
-builder.Services.AddSingleton<InputSimulatorService>();
-builder.Services.AddSingleton<ScreenColorService>();
+builder.Services.AddSingleton<IScriptRepository, ScriptRepository>();
+builder.Services.AddSingleton<IPresetRepository, PresetRepository>();
+builder.Services.AddSingleton<IInputSimulator, InputSimulatorService>();
+builder.Services.AddSingleton<IScreenSampler, ScreenColorService>();
+builder.Services.AddSingleton<IDelayScheduler, TaskDelayScheduler>();
+builder.Services.AddSingleton<IRandomSource, SharedRandomSource>();
 builder.Services.AddSingleton<ConfigValidator>();
 builder.Services.AddSingleton<HotkeyEngine>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());

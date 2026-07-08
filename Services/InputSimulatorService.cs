@@ -28,7 +28,7 @@ namespace BestInScript.API.Services
     ///   Mouse    : Mouse1 (left), Mouse2 (right), Mouse3 (middle),
     ///              Mouse4 (XButton1), Mouse5 (XButton2)
     /// </summary>
-    public class InputSimulatorService
+    public class InputSimulatorService : IInputSimulator
     {
         // Win32 constants
         private const uint INPUT_MOUSE = 0;

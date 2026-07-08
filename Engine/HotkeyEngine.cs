@@ -97,10 +97,10 @@ namespace BestInScript.API.Engine
 
         // ── State ──────────────────────────────────────────────────────────────
         private readonly ILogger<HotkeyEngine> _logger;
-        private readonly ScriptRepository _repo;
-        private readonly PresetRepository _presetRepo;
-        private readonly InputSimulatorService _inputSim;
-        private readonly ScreenColorService _screen;
+        private readonly IScriptRepository _repo;
+        private readonly IPresetRepository _presetRepo;
+        private readonly IInputSimulator _inputSim;
+        private readonly IScreenSampler _screen;
 
         /// <summary>Sentinel owner id meaning "the user pressed this script's own trigger key directly".</summary>
         public static readonly Guid UserOwnerId = Guid.Empty;
@@ -121,10 +121,10 @@ namespace BestInScript.API.Engine
         // ── Construction ───────────────────────────────────────────────────────
         public HotkeyEngine(
             ILogger<HotkeyEngine> logger,
-            ScriptRepository repo,
-            PresetRepository presetRepo,
-            InputSimulatorService inputSim,
-            ScreenColorService screen)
+            IScriptRepository repo,
+            IPresetRepository presetRepo,
+            IInputSimulator inputSim,
+            IScreenSampler screen)
         {
             _logger = logger;
             _repo = repo;
