@@ -24,6 +24,7 @@ namespace BestInScript.API.Engine
     {
         private readonly ILogger<ScriptCoordinator> _logger;
         private readonly IScriptRunner _runner;
+        private readonly PixelCaptureService _capture;
 
         /// <summary>Sentinel owner id meaning "the user pressed this script's own trigger key directly".</summary>
         public static readonly Guid UserOwnerId = Guid.Empty;
@@ -36,10 +37,11 @@ namespace BestInScript.API.Engine
         // Guards all owner-set mutations + start/stop transitions.
         private readonly object _toggleLock = new();
 
-        public ScriptCoordinator(ILogger<ScriptCoordinator> logger, IScriptRunner runner)
+        public ScriptCoordinator(ILogger<ScriptCoordinator> logger, IScriptRunner runner, PixelCaptureService capture)
         {
             _logger = logger;
             _runner = runner;
+            _capture = capture;
         }
 
         public int ScriptCount => _scriptRegistry.Count;
@@ -254,6 +256,11 @@ namespace BestInScript.API.Engine
         /// </summary>
         public void HandleTriggerKey(ushort vkCode)
         {
+            // While a guided in-game capture is armed, its hotkey is consumed here — it
+            // samples the screen instead of toggling any script/preset bound to the same key.
+            if (_capture.TryConsumeKey(vkCode))
+                return;
+
             if (_scriptRegistry.TryGetValue(vkCode, out var script))
             {
                 ToggleUserOwnership(script);

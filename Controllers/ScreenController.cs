@@ -13,8 +13,13 @@ namespace BestInScript.API.Controllers
     public class ScreenController : ControllerBase
     {
         private readonly IScreenSampler _screen;
+        private readonly PixelCaptureService _capture;
 
-        public ScreenController(IScreenSampler screen) => _screen = screen;
+        public ScreenController(IScreenSampler screen, PixelCaptureService capture)
+        {
+            _screen = screen;
+            _capture = capture;
+        }
 
         /// <summary>
         /// Color at a screen coordinate. Optional radius averages a square
@@ -58,5 +63,38 @@ namespace BestInScript.API.Controllers
                 readable = c is not null
             });
         }
+
+        // ── Guided in-game capture (BACKLOG 2.1) ─────────────────────────────────
+
+        /// <summary>
+        /// Arm the guided in-game capture on a keyboard hotkey. Once armed, pressing
+        /// that key in the game captures the ready color (first press) and the cooldown
+        /// color (second press) at the cursor — no alt-tabbing back to the browser.
+        /// POST /api/screen/capture/arm?hotkey=F8
+        /// </summary>
+        [HttpPost("capture/arm")]
+        public IActionResult ArmCapture([FromQuery] string hotkey)
+        {
+            var error = _capture.Arm(hotkey ?? "");
+            if (error is not null)
+                return Problem(error, statusCode: 400);
+
+            return Ok(_capture.GetState());
+        }
+
+        /// <summary>Cancel the guided in-game capture. POST /api/screen/capture/disarm</summary>
+        [HttpPost("capture/disarm")]
+        public IActionResult DisarmCapture()
+        {
+            _capture.Disarm();
+            return Ok(_capture.GetState());
+        }
+
+        /// <summary>
+        /// Current capture state — the UI polls this to narrate the flow and pull the
+        /// captured colors + any coordinate-nudge suggestion. GET /api/screen/capture/state
+        /// </summary>
+        [HttpGet("capture/state")]
+        public IActionResult CaptureState() => Ok(_capture.GetState());
     }
 }

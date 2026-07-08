@@ -1054,6 +1054,14 @@
         let pixelLiveTimer = null;   // setInterval handle for the live readout
         let sampleBusy = false;      // a countdown sample is in progress
 
+        // Guided in-game capture state
+        let captureTimer = null;     // setInterval handle for the capture-state poll
+        let captureArmed = false;    // a guided in-game capture is currently armed
+        let captureHotkey = 'F8';    // chosen capture hotkey
+        let captureListening = false;// listening for a keypress to set the hotkey
+        let lastCaptureSeq = -1;     // last "Done" seq already applied to the form
+        let lastCaptureState = null; // most recent capture-state snapshot (drives status + nudge)
+
         // ── Bootstrap ────────────────────────────────────────────────────────────────
         (async () => {
             await loadProfiles();
@@ -1831,6 +1839,26 @@
           </div>
 
           <div class="pt-sub">
+            <div class="pt-sub-title">Guided In-Game Capture</div>
+            <div class="pt-hint" style="margin-bottom:12px">
+              Capture the coordinate <em>and</em> both colors <strong>from inside the game</strong>,
+              without alt-tabbing. Pick a hotkey, click Start, then in-game hover the skill icon and
+              press the hotkey once while it's <strong>ready</strong> and again while it's
+              <strong>on cooldown</strong>. If the two colors are too close to tell apart, it suggests
+              a nearby pixel that separates them better.
+            </div>
+            <div class="pt-coord-row" style="align-items:flex-end">
+              <div class="form-group">
+                <label>Capture hotkey</label>
+                <button class="btn-sample" id="pt-cap-key" onclick="pickCaptureKey()">${captureHotkey}</button>
+              </div>
+              <button class="btn-sample" id="pt-cap-start" onclick="toggleInGameCapture()">${captureArmed ? '■ Cancel capture' : '▶ Start in-game capture'}</button>
+            </div>
+            <div class="pt-hint" id="pt-cap-status" style="margin-top:12px"></div>
+            <div id="pt-cap-nudge" style="margin-top:10px"></div>
+          </div>
+
+          <div class="pt-sub">
             <div class="pt-sub-title">Matching &amp; Timing</div>
 
             <div class="pt-toggle-row" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
@@ -1905,6 +1933,7 @@
             document.getElementById('pt-radius').value = String(pt.sampleRadius);
             updatePixelSwatches();
             updateColorStatus();
+            renderCaptureStatus();
         }
 
         function syncPixelField(field, value) {
@@ -2087,6 +2116,7 @@
         }
 
         function stopPixelLive() {
+            stopCaptureFlow(); // navigating away / closing the panel also cancels any armed capture
             if (pixelLiveTimer) { clearInterval(pixelLiveTimer); pixelLiveTimer = null; }
             const btn = document.getElementById('pt-live-btn');
             if (btn) btn.textContent = '▶ Start live readout';
@@ -2109,6 +2139,165 @@
             } else {
                 if (sw) sw.style.background = 'var(--bg0)';
                 if (rgb) rgb.innerHTML = '<span class="muted">—</span>';
+            }
+        }
+
+        // ── Guided in-game capture ──────────────────────────────────────────────────────
+        function pickCaptureKey() {
+            if (captureListening || captureArmed) return;
+            captureListening = true;
+            const btn = document.getElementById('pt-cap-key');
+            if (!btn) return;
+            btn.classList.add('listening');
+            btn.textContent = '⌨ Press a key…';
+
+            function onKey(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const name = mapEventKey(e);
+                if (!name || !TRIGGER_KEYS.includes(name)) {
+                    toast('Invalid capture hotkey (mouse buttons not allowed)', 'error');
+                } else {
+                    captureHotkey = name;
+                }
+                captureListening = false;
+                btn.classList.remove('listening');
+                btn.textContent = captureHotkey;
+                document.removeEventListener('keydown', onKey, true);
+            }
+            document.addEventListener('keydown', onKey, true);
+        }
+
+        async function toggleInGameCapture() {
+            if (captureArmed) { stopCaptureFlow(); return; }
+            const pt = selected.pixelTrigger;
+            if (!pt) return;
+            try {
+                const r = await fetch(`${API}/screen/capture/arm?hotkey=${encodeURIComponent(captureHotkey)}`, { method: 'POST' });
+                if (!r.ok) {
+                    let msg = 'Could not arm capture';
+                    try { const e = await r.json(); if (e && e.detail) msg = e.detail; } catch { }
+                    toast(msg, 'error');
+                    return;
+                }
+                captureArmed = true;
+                lastCaptureSeq = -1;
+                lastCaptureState = await r.json();
+                const startBtn = document.getElementById('pt-cap-start');
+                if (startBtn) startBtn.textContent = '■ Cancel capture';
+                const keyBtn = document.getElementById('pt-cap-key');
+                if (keyBtn) keyBtn.disabled = true;
+                renderCaptureStatus();
+                captureTimer = setInterval(pollCapture, 400);
+                toast(`Capture armed — press ${captureHotkey} in-game over the READY icon`, 'success');
+            } catch (e) {
+                toast('Network error: ' + e.message, 'error');
+            }
+        }
+
+        async function pollCapture() {
+            if (!captureArmed) return;
+            try {
+                const r = await fetch(`${API}/screen/capture/state`);
+                if (!r.ok) return;
+                const st = await r.json();
+                lastCaptureState = st;
+                renderCaptureStatus();
+                if (st.stage === 'Done' && st.seq !== lastCaptureSeq) {
+                    lastCaptureSeq = st.seq;
+                    applyCaptureResult(st);
+                }
+            } catch { /* transient network blip — keep polling */ }
+        }
+
+        function applyCaptureResult(st) {
+            const pt = selected && selected.pixelTrigger;
+            if (!pt) { stopCaptureFlow(); return; }
+            if (st.readyColor) pt.readyColor = st.readyColor;
+            if (st.coolColor) pt.cooldownColor = st.coolColor;
+            pt.x = st.x; pt.y = st.y;
+            const xEl = document.getElementById('pt-x'); if (xEl) xEl.value = st.x;
+            const yEl = document.getElementById('pt-y'); if (yEl) yEl.value = st.y;
+            updatePixelSwatches();
+            updateColorStatus();
+            toast(`Captured — ready rgb(${(st.readyColor || []).join(', ')}) / cooldown rgb(${(st.coolColor || []).join(', ')})`, 'success');
+            // Capture done: disarm on the server and stop polling, but keep the result on screen
+            // so the nudge suggestion stays actionable.
+            stopCaptureFlow(true);
+        }
+
+        function renderCaptureStatus() {
+            const el = document.getElementById('pt-cap-status');
+            if (!el) return;
+            const st = lastCaptureState;
+            if (!st || st.stage === 'Idle') {
+                el.innerHTML = '';
+                renderNudge(null);
+                return;
+            }
+            if (st.unreadable) {
+                el.innerHTML = `⚠ Screen unreadable at the cursor — is the game fullscreen-exclusive? ` +
+                    `Switch to borderless/windowed and press <strong>${captureHotkey}</strong> again.`;
+                el.style.color = 'var(--red)';
+            } else if (st.stage === 'AwaitingReady') {
+                el.innerHTML = `① In the game, hover the skill icon while it's <strong>READY</strong> and press <strong>${captureHotkey}</strong>.`;
+                el.style.color = 'var(--muted)';
+            } else if (st.stage === 'AwaitingCooldown') {
+                el.innerHTML = `✓ Ready color captured at (${st.x}, ${st.y}). ② Now press <strong>${captureHotkey}</strong> while the icon is <strong>ON COOLDOWN</strong>.`;
+                el.style.color = 'var(--muted)';
+            } else if (st.stage === 'Done') {
+                el.innerHTML = `✓ Capture complete — pixel (${st.x}, ${st.y}) and both colors filled in.`;
+                el.style.color = 'var(--accent2)';
+            }
+            renderNudge(st.suggestion);
+        }
+
+        function renderNudge(sg) {
+            const nudgeEl = document.getElementById('pt-cap-nudge');
+            if (!nudgeEl) return;
+            // Only worth suggesting when the chosen pixel is too close AND a nearby one is clearly better.
+            if (!sg || (sg.dx === 0 && sg.dy === 0) || sg.separationAtCenter >= 25 || sg.separationAtBest < sg.separationAtCenter + 15) {
+                nudgeEl.innerHTML = '';
+                return;
+            }
+            const dx = `${sg.dx >= 0 ? '+' : ''}${sg.dx}`;
+            const dy = `${sg.dy >= 0 ? '+' : ''}${sg.dy}`;
+            nudgeEl.innerHTML =
+                `<div class="pt-hint" style="color:var(--red)">⚠ Ready/cooldown differ by only ${sg.separationAtCenter.toFixed(0)} at your pixel — too close to tell apart reliably.</div>` +
+                `<div class="pt-hint" style="margin-top:4px">Nudging to <strong>(${sg.suggestedX}, ${sg.suggestedY})</strong> (${dx}, ${dy}) separates them by <strong>${sg.separationAtBest.toFixed(0)}</strong>.</div>` +
+                `<button class="btn-sample" style="margin-top:8px" onclick="applyNudge()">Apply nudge → (${sg.suggestedX}, ${sg.suggestedY})</button>`;
+        }
+
+        function applyNudge() {
+            const st = lastCaptureState;
+            const pt = selected && selected.pixelTrigger;
+            if (!st || !st.suggestion || !pt) return;
+            const sg = st.suggestion;
+            pt.x = sg.suggestedX; pt.y = sg.suggestedY;
+            if (sg.suggestedReady) pt.readyColor = sg.suggestedReady;
+            if (sg.suggestedCool) pt.cooldownColor = sg.suggestedCool;
+            const xEl = document.getElementById('pt-x'); if (xEl) xEl.value = pt.x;
+            const yEl = document.getElementById('pt-y'); if (yEl) yEl.value = pt.y;
+            updatePixelSwatches();
+            updateColorStatus();
+            const nudgeEl = document.getElementById('pt-cap-nudge'); if (nudgeEl) nudgeEl.innerHTML = '';
+            toast(`Nudged to (${pt.x}, ${pt.y})`, 'success');
+        }
+
+        function stopCaptureFlow(keepResult) {
+            if (captureTimer) { clearInterval(captureTimer); captureTimer = null; }
+            const wasArmed = captureArmed;
+            captureArmed = false;
+            const startBtn = document.getElementById('pt-cap-start');
+            if (startBtn) startBtn.textContent = '▶ Start in-game capture';
+            const keyBtn = document.getElementById('pt-cap-key');
+            if (keyBtn) keyBtn.disabled = false;
+            if (!keepResult) {
+                lastCaptureState = null;
+                renderCaptureStatus();
+            }
+            if (wasArmed) {
+                fetch(`${API}/screen/capture/disarm`, { method: 'POST' }).catch(() => { });
             }
         }
 

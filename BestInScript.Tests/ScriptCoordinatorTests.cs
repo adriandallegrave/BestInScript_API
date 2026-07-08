@@ -13,10 +13,15 @@ namespace BestInScript.Tests;
 public class ScriptCoordinatorTests
 {
     private readonly FakeScriptRunner _runner = new();
+    private readonly FakeScreenSampler _screen = new();
+    private readonly PixelCaptureService _capture;
     private readonly ScriptCoordinator _coordinator;
 
     public ScriptCoordinatorTests()
-        => _coordinator = new ScriptCoordinator(NullLogger<ScriptCoordinator>.Instance, _runner);
+    {
+        _capture = new PixelCaptureService(_screen, NullLogger<PixelCaptureService>.Instance);
+        _coordinator = new ScriptCoordinator(NullLogger<ScriptCoordinator>.Instance, _runner, _capture);
+    }
 
     private static ScriptConfig Script(string name, string trigger) => new()
     {
@@ -238,5 +243,30 @@ public class ScriptCoordinatorTests
         Assert.Equal(0, _coordinator.ScriptCount);
         Assert.Equal(0, _coordinator.PresetCount);
         Assert.True(_runner.Tokens.Single().IsCancellationRequested); // the running script was cancelled
+    }
+
+    [Fact]
+    public void ArmedCaptureHotkey_IsConsumed_DoesNotToggleScript()
+    {
+        var s = Script("s", "F1");
+        _coordinator.RegisterScript(s);
+        _capture.Arm("F1"); // capture armed on the same key the script is bound to
+
+        _coordinator.HandleTriggerKey(Vk("F1"));
+
+        // The press was consumed by capture; the script must not have toggled on.
+        Assert.False(IsRunning(s.Id));
+    }
+
+    [Fact]
+    public void UnarmedCapture_NormalToggleStillWorks()
+    {
+        var s = Script("s", "F1");
+        _coordinator.RegisterScript(s);
+        // capture is idle (never armed)
+
+        _coordinator.HandleTriggerKey(Vk("F1"));
+
+        Assert.True(IsRunning(s.Id));
     }
 }

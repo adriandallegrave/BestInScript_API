@@ -31,6 +31,7 @@ builder.Services.AddSingleton<IProfileScopedStore>(sp => sp.GetRequiredService<P
 builder.Services.AddSingleton<ProfileManager>();
 builder.Services.AddSingleton<IInputSimulator, InputSimulatorService>();
 builder.Services.AddSingleton<IScreenSampler, ScreenColorService>();
+builder.Services.AddSingleton<PixelCaptureService>();
 builder.Services.AddSingleton<IDelayScheduler, TaskDelayScheduler>();
 builder.Services.AddSingleton<IRandomSource, SharedRandomSource>();
 builder.Services.AddSingleton<ConfigValidator>();
