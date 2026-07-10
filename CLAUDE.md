@@ -12,14 +12,14 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.6.0** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.7.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
 - **Major** `+1.0.0` — breaking: existing data files (`scripts.json` / `presets.json` / `overlay-settings.json`) or setup stop working and the user must reconfigure.
 - Docs-only changes: no bump.
 
-For every user-requested feature: implement it, then (1) write a short feature description, (2) write a one-line commit message, (3) append a row to the README version table (version, date, commit, description), (4) commit, (5) `git tag vX.Y.Z`.
+For every user-requested feature: implement it, then (1) write a short feature description, (2) write a one-line commit message, (3) append a row to the README version table (version, date, commit, description), (4) if the feature is a `BACKLOG.md` item, mark its **Shipped** column `✅ vX.Y.Z`, (5) commit, (6) `git tag vX.Y.Z`.
 
 ## Key File Locations
 

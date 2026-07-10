@@ -37,7 +37,7 @@ The **#** column numbers each item (`section.item`); **Shipped** marks released 
 | # | Shipped | Feature | Description | Effort |
 |---|---------|---------|-------------|--------|
 | 4.1 | | **Drag-to-position edit mode** | Toggle an edit mode where the overlay accepts mouse input, drag the pill, save the position. Removes coordinate guessing. Requires temporarily dropping `WS_EX_TRANSPARENT`. | M |
-| 4.2 | | **Per-entry style** | Color/icon per script in the overlay — `ShowInOverlay` grows into richer per-script overlay config. | S |
+| 4.2 | ✅ 1.7.0 | **Per-entry style** | Color/icon per script in the overlay — `ShowInOverlay` grows into richer per-script overlay config. | S |
 | 4.3 | | **"Time since last fire"** | Pixel-gated entries show seconds since the last cast. Debugging aid — passive information only, no timing advantage. | S |
 
 ## 5. Engine & scripts (fair-play constrained)
