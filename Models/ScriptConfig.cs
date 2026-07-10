@@ -48,5 +48,19 @@ namespace BestInScript.API.Models
         /// off, so the overlay only shows what is actually active.
         /// </summary>
         public bool ShowInOverlay { get; set; } = false;
+
+        /// <summary>
+        /// Optional overlay accent color as [R,G,B] (each 0–255). Tints this
+        /// entry's label text and icon in the on-screen overlay so multiple
+        /// active rows are easy to tell apart. Null (the default) = plain white.
+        /// The status dot color is unaffected — it always reflects run state.
+        /// </summary>
+        public int[]? OverlayColor { get; set; }
+
+        /// <summary>
+        /// Optional short emoji/glyph shown before the name in the overlay row
+        /// (e.g. "⚔️"). Null/empty (the default) = no icon.
+        /// </summary>
+        public string? OverlayIcon { get; set; }
     }
 }

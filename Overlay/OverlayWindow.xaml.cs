@@ -66,6 +66,35 @@ namespace BestInScript.API.Overlay
             return b;
         }
 
+        // Per-entry accent brushes, cached so we reuse one frozen brush per color.
+        // Only touched from Refresh (WPF dispatcher thread), so no lock needed.
+        private static readonly Dictionary<string, Brush> _labelBrushes = new();
+
+        /// <summary>
+        /// Resolve a per-entry label brush from an optional [R,G,B] accent.
+        /// Null/malformed falls back to the default white label.
+        /// </summary>
+        private static Brush ResolveLabelBrush(int[]? rgb)
+        {
+            if (rgb is not { Length: 3 }) return Brushes.White;
+
+            int r = rgb[0], g = rgb[1], b = rgb[2];
+            if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
+                return Brushes.White;
+
+            var key = $"{r},{g},{b}";
+            if (!_labelBrushes.TryGetValue(key, out var brush))
+            {
+                brush = Freeze(Color.FromRgb((byte)r, (byte)g, (byte)b));
+                _labelBrushes[key] = brush;
+            }
+            return brush;
+        }
+
+        /// <summary>Icon prefix (with trailing space) for a row, or "" when unset.</summary>
+        private static string IconPrefix(string? icon)
+            => string.IsNullOrWhiteSpace(icon) ? "" : icon.Trim() + " ";
+
         // Used to skip rebuilding the row list when nothing visible changed.
         private string _lastSignature = "";
 
@@ -158,7 +187,10 @@ namespace BestInScript.API.Overlay
             // the overlay reads top-down as "group then members".
             var presetRows = presets
                 .Where(p => p.IsActive && p.ShowInOverlay)
-                .Select(p => ((Brush Dot, string Text))(ActiveDot, $"[{p.Name}] · ON"));
+                .Select(p => ((Brush Dot, Brush Label, string Text))(
+                    ActiveDot,
+                    ResolveLabelBrush(p.OverlayColor),
+                    $"{IconPrefix(p.OverlayIcon)}[{p.Name}] · ON"));
 
             var rows = presetRows.Concat(scriptRows).ToList();
 
@@ -169,7 +201,7 @@ namespace BestInScript.API.Overlay
                     if (Visibility == Visibility.Visible) Hide();
                     return;
                 }
-                rows = new() { (IdleDot, "BestInScript · idle") };
+                rows = new() { (IdleDot, Brushes.White, "BestInScript · idle") };
             }
 
             ApplyRows(rows);
@@ -181,39 +213,45 @@ namespace BestInScript.API.Overlay
         /// Decide the dot + label for one displayable script.
         /// Pixel scripts get informational state; blind scripts get on/off.
         /// </summary>
-        private static (Brush Dot, string Text) BuildRow(ScriptStatus s)
+        private static (Brush Dot, Brush Label, string Text) BuildRow(ScriptStatus s)
         {
-            if (!s.HasPixelTrigger)
-                return (ActiveDot, $"{s.Name} · ON");
+            var label = ResolveLabelBrush(s.OverlayColor);
+            var icon = IconPrefix(s.OverlayIcon);
 
-            return s.PixelState switch
-            {
-                PixelOverlayState.Ready => (ActiveDot, $"{s.Name} · READY"),
-                PixelOverlayState.Waiting => (WaitingDot, $"{s.Name} · waiting"),
-                PixelOverlayState.Unreadable => (ErrorDot, $"{s.Name} · unreadable"),
-                _ => (WaitingDot, $"{s.Name} · …")
-            };
+            var (dot, word) = !s.HasPixelTrigger
+                ? (ActiveDot, "ON")
+                : s.PixelState switch
+                {
+                    PixelOverlayState.Ready => (ActiveDot, "READY"),
+                    PixelOverlayState.Waiting => (WaitingDot, "waiting"),
+                    PixelOverlayState.Unreadable => (ErrorDot, "unreadable"),
+                    _ => (WaitingDot, "…")
+                };
+
+            return (dot, label, $"{icon}{s.Name} · {word}");
         }
 
         /// <summary>
         /// Rebuild the RowsPanel children only when the visible signature has
         /// actually changed — avoids 5/second flicker when nothing moved.
         /// </summary>
-        private void ApplyRows(List<(Brush Dot, string Text)> rows)
+        private void ApplyRows(List<(Brush Dot, Brush Label, string Text)> rows)
         {
             var sig = string.Join(
                 "||",
                 rows.Select(r =>
-                    r.Dot is SolidColorBrush b
-                        ? b.Color.ToString() + "::" + r.Text
-                        : r.Text))
+                {
+                    var dotKey = r.Dot is SolidColorBrush db ? db.Color.ToString() : "";
+                    var labelKey = r.Label is SolidColorBrush lb ? lb.Color.ToString() : "";
+                    return dotKey + "::" + labelKey + "::" + r.Text;
+                }))
                 + "@@fs=" + _settings.FontSize;
 
             if (sig == _lastSignature) return;
             _lastSignature = sig;
 
             RowsPanel.Children.Clear();
-            foreach (var (dot, text) in rows)
+            foreach (var (dot, label, text) in rows)
             {
                 var rowPanel = new StackPanel
                 {
@@ -231,7 +269,7 @@ namespace BestInScript.API.Overlay
                 rowPanel.Children.Add(new TextBlock
                 {
                     Text = text,
-                    Foreground = Brushes.White,
+                    Foreground = label,
                     FontFamily = new FontFamily("Segoe UI"),
                     FontSize = _settings.FontSize,
                     FontWeight = FontWeights.SemiBold,

@@ -1249,7 +1249,7 @@
                 const running = !!statuses[s.id];
                 const sel = selectedKind === 'script' && selected && selected.id === s.id ? 'selected' : '';
                 const pixelTag = s.pixelTrigger ? ' · 👁 pixel' : '';
-                const overlayTag = s.showInOverlay ? ' · 📺 overlay' : '';
+                const overlayTag = s.showInOverlay ? ` · ${s.overlayIcon ? esc(s.overlayIcon) : '📺'} overlay` : '';
                 return `
           <div class="script-card ${sel}" data-id="${s.id}" onclick="selectScript('${s.id}')">
             <div class="key-badge">${esc(s.triggerKey)}</div>
@@ -1271,7 +1271,7 @@
             el.innerHTML = presets.map(p => {
                 const active = !!presetStatuses[p.id];
                 const sel = selectedKind === 'preset' && selected && selected.id === p.id ? 'selected' : '';
-                const overlayTag = p.showInOverlay ? ' · 📺 overlay' : '';
+                const overlayTag = p.showInOverlay ? ` · ${p.overlayIcon ? esc(p.overlayIcon) : '📺'} overlay` : '';
                 const count = (p.scriptIds || []).length;
                 return `
           <div class="script-card preset-card ${sel}" data-id="${p.id}" onclick="selectPreset('${p.id}')">
@@ -1304,7 +1304,8 @@
                 id: null, name: 'New Script', triggerKey: '3',
                 steps: [{ hold: [], press: [] }], delayMin: 0.4, delayMax: 0.6,
                 pixelTrigger: null,
-                showInOverlay: false
+                showInOverlay: false,
+                overlayColor: null, overlayIcon: null
             };
             renderEditor();
         }
@@ -1329,7 +1330,8 @@
                 name: 'New Preset',
                 triggerKey: 'F1',
                 scriptIds: [],
-                showInOverlay: false
+                showInOverlay: false,
+                overlayColor: null, overlayIcon: null
             };
             renderEditor();
         }
@@ -1413,6 +1415,7 @@
                 </div>
               </div>
             </div>
+            ${overlayStyleFieldsHtml()}
           </div>
         </div>
       `);
@@ -1518,6 +1521,7 @@
                 </div>
               </div>
             </div>
+            ${overlayStyleFieldsHtml()}
           </div>
         </div>
       `);
@@ -1771,7 +1775,72 @@
 
         function syncShowOverlay(value) {
             selected.showInOverlay = !!value;
-            renderSidebarCards();   // update the small "📺 overlay" tag live
+            const box = document.getElementById('overlay-style-fields');
+            if (box) box.style.display = value ? 'block' : 'none';
+            renderSidebarCards();   // update the small overlay tag live
+        }
+
+        // ── Per-entry overlay style (color + icon) ──────────────────────────────
+        const OVERLAY_EMOJI = ['⚔️', '🔥', '❄️', '⚡', '🛡️', '💀', '🏹', '🩸'];
+
+        // Sub-block shown under the "Show in overlay" toggle in both the script
+        // and preset forms. Colors tint the label + icon; the status dot is
+        // unaffected. White (#ffffff) means "no override" → stored as null.
+        function overlayStyleFieldsHtml() {
+            const shown = selected.showInOverlay ? 'block' : 'none';
+            const hex = rgbToHex(selected.overlayColor) || '#ffffff';
+            const icon = selected.overlayIcon || '';
+            const btn = 'font-size:15px;line-height:1;padding:3px 6px;background:var(--panel,#222);' +
+                'border:1px solid var(--border);border-radius:4px;cursor:pointer';
+            const chips = OVERLAY_EMOJI.map(e =>
+                `<button type="button" style="${btn}" onclick="syncOverlayIcon('${e}')">${e}</button>`).join('');
+            return `
+        <div id="overlay-style-fields" style="display:${shown};margin-top:10px;padding-left:52px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <label style="font-size:12px;color:var(--muted)">Accent</label>
+            <input type="color" id="f-overlay-color" value="${hex}" oninput="syncOverlayColor(this.value)"
+              style="width:38px;height:26px;padding:0;border:1px solid var(--border);border-radius:4px;background:none;cursor:pointer" />
+            <button type="button" style="${btn};font-size:11px" onclick="resetOverlayColor()">Default</button>
+            <label style="font-size:12px;color:var(--muted);margin-left:10px">Icon</label>
+            <input type="text" id="f-overlay-icon" maxlength="8" value="${esc(icon)}" placeholder="emoji"
+              oninput="syncOverlayIcon(this.value)" style="width:64px;text-align:center" />
+          </div>
+          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+            ${chips}
+            <button type="button" style="${btn}" title="No icon" onclick="syncOverlayIcon('')">✖</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">Tints this row's text + icon in the overlay. The status dot keeps its color.</div>
+        </div>`;
+        }
+
+        function hexToRgb(hex) {
+            const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec((hex || '').trim());
+            return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
+        }
+
+        function rgbToHex(rgb) {
+            if (!Array.isArray(rgb) || rgb.length !== 3) return null;
+            return '#' + rgb.map(v => Math.max(0, Math.min(255, v | 0)).toString(16).padStart(2, '0')).join('');
+        }
+
+        function syncOverlayColor(hex) {
+            // Treat plain white as "no override" so we don't persist a redundant value.
+            selected.overlayColor = (hex && hex.toLowerCase() !== '#ffffff') ? hexToRgb(hex) : null;
+            renderSidebarCards();
+        }
+
+        function resetOverlayColor() {
+            selected.overlayColor = null;
+            const el = document.getElementById('f-overlay-color');
+            if (el) el.value = '#ffffff';
+            renderSidebarCards();
+        }
+
+        function syncOverlayIcon(value) {
+            selected.overlayIcon = value || null;
+            const el = document.getElementById('f-overlay-icon');
+            if (el) el.value = value || '';   // keep the text box in sync when set via a palette chip
+            renderSidebarCards();
         }
 
         // ══ Pixel Trigger ═════════════════════════════════════════════════════════════
@@ -2337,7 +2406,9 @@
                 delayMin: selected.delayMin,
                 delayMax: selected.delayMax,
                 pixelTrigger: selected.pixelTrigger || null,
-                showInOverlay: !!selected.showInOverlay
+                showInOverlay: !!selected.showInOverlay,
+                overlayColor: selected.overlayColor || null,
+                overlayIcon: selected.overlayIcon || null
             };
 
             try {
@@ -2396,7 +2467,9 @@
                 name: selected.name,
                 triggerKey: selected.triggerKey,
                 scriptIds: selected.scriptIds || [],
-                showInOverlay: !!selected.showInOverlay
+                showInOverlay: !!selected.showInOverlay,
+                overlayColor: selected.overlayColor || null,
+                overlayIcon: selected.overlayIcon || null
             };
 
             try {

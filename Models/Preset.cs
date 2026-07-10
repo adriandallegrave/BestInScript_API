@@ -28,5 +28,18 @@ namespace BestInScript.API.Models
 
         /// <summary>Surface this preset in the on-screen overlay while active.</summary>
         public bool ShowInOverlay { get; set; } = false;
+
+        /// <summary>
+        /// Optional overlay accent color as [R,G,B] (each 0–255). Tints this
+        /// preset's label text and icon in the on-screen overlay. Null (the
+        /// default) = plain white. The status dot color is unaffected.
+        /// </summary>
+        public int[]? OverlayColor { get; set; }
+
+        /// <summary>
+        /// Optional short emoji/glyph shown before the name in the overlay row.
+        /// Null/empty (the default) = no icon.
+        /// </summary>
+        public string? OverlayIcon { get; set; }
     }
 }

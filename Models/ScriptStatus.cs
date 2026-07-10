@@ -16,5 +16,11 @@ namespace BestInScript.API.Models
 
         /// <summary>Live pixel verdict for pixel-triggered scripts; NotApplicable otherwise.</summary>
         public PixelOverlayState PixelState { get; set; }
+
+        /// <summary>Optional overlay accent [R,G,B]; null = default white label.</summary>
+        public int[]? OverlayColor { get; set; }
+
+        /// <summary>Optional emoji/glyph prefixed to the overlay label; null/empty = none.</summary>
+        public string? OverlayIcon { get; set; }
     }
 }

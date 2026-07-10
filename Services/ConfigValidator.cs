@@ -51,6 +51,24 @@ namespace BestInScript.API.Services
                 }
             }
 
+            var overlayError = ValidateOverlayStyle(script.OverlayColor, script.OverlayIcon);
+            if (overlayError is not null) return overlayError;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Shared check for the optional per-entry overlay accent color and icon.
+        /// Both live on scripts and presets. Returns null when valid.
+        /// </summary>
+        private static string? ValidateOverlayStyle(int[]? color, string? icon)
+        {
+            if (color is { } c && (c.Length != 3 || c.Any(v => v < 0 || v > 255)))
+                return "Overlay color must be three values 0–255 [R,G,B].";
+
+            if (!string.IsNullOrEmpty(icon) && icon.Length > 8)
+                return "Overlay icon must be at most 8 characters.";
+
             return null;
         }
 
@@ -88,6 +106,9 @@ namespace BestInScript.API.Services
 
             // Deduplicate member ids while preserving order.
             preset.ScriptIds = preset.ScriptIds.Distinct().ToList();
+
+            var overlayError = ValidateOverlayStyle(preset.OverlayColor, preset.OverlayIcon);
+            if (overlayError is not null) return overlayError;
 
             return null;
         }

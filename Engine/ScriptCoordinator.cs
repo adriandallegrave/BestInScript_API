@@ -178,7 +178,9 @@ namespace BestInScript.API.Engine
                     IsRunning = e.Owners.Count > 0,
                     ShowInOverlay = e.Config.ShowInOverlay,
                     HasPixelTrigger = e.Config.PixelTrigger != null,
-                    PixelState = e.PixelState
+                    PixelState = e.PixelState,
+                    OverlayColor = e.Config.OverlayColor,
+                    OverlayIcon = e.Config.OverlayIcon
                 }).ToList();
             }
         }
@@ -195,7 +197,9 @@ namespace BestInScript.API.Engine
                     TriggerKey = e.Config.TriggerKey,
                     IsActive = e.IsActive,
                     ShowInOverlay = e.Config.ShowInOverlay,
-                    ScriptIds = new List<Guid>(e.Config.ScriptIds)
+                    ScriptIds = new List<Guid>(e.Config.ScriptIds),
+                    OverlayColor = e.Config.OverlayColor,
+                    OverlayIcon = e.Config.OverlayIcon
                 }).ToList();
             }
         }
