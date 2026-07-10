@@ -56,6 +56,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
 // OverlayHostedService: spins up the WPF window on a dedicated STA thread.
 // Both are required — without the hosted service no overlay is created on screen.
 builder.Services.AddSingleton<OverlaySettingsStore>();
+builder.Services.AddSingleton<OverlayEditModeSignal>();
 builder.Services.AddHostedService<OverlayHostedService>();
 
 // ── Diablo 4 event timers (world boss / helltide / legion) ──────────────────

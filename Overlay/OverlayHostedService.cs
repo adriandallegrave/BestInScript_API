@@ -21,6 +21,7 @@ namespace BestInScript.API.Overlay
         private readonly HotkeyEngine _engine;
         private readonly OverlaySettingsStore _store;
         private readonly EventScheduleService _events;
+        private readonly OverlayEditModeSignal _editSignal;
         private readonly ILogger<OverlayHostedService> _logger;
 
         private Thread? _uiThread;
@@ -31,11 +32,13 @@ namespace BestInScript.API.Overlay
             HotkeyEngine engine,
             OverlaySettingsStore store,
             EventScheduleService events,
+            OverlayEditModeSignal editSignal,
             ILogger<OverlayHostedService> logger)
         {
             _engine = engine;
             _store = store;
             _events = events;
+            _editSignal = editSignal;
             _logger = logger;
         }
 
@@ -66,6 +69,11 @@ namespace BestInScript.API.Overlay
                     // Push live settings changes onto the UI thread.
                     _store.Changed += OnSettingsChanged;
 
+                    // Drag-to-position: web arms edit mode, the pill reports the
+                    // committed position back for us to persist.
+                    _editSignal.EnterRequested += OnEnterEditRequested;
+                    _window.PositionCommitted += OnPositionCommitted;
+
                     ready.Set();
                     app.Run(_window);
                 }
@@ -95,6 +103,8 @@ namespace BestInScript.API.Overlay
             try
             {
                 _store.Changed -= OnSettingsChanged;
+                _editSignal.EnterRequested -= OnEnterEditRequested;
+                if (_window != null) _window.PositionCommitted -= OnPositionCommitted;
                 _dispatcher?.InvokeAsync(() =>
                 {
                     try { Application.Current?.Shutdown(); } catch { /* already gone */ }
@@ -115,6 +125,28 @@ namespace BestInScript.API.Overlay
             if (dispatcher == null || window == null) return;
 
             dispatcher.InvokeAsync(() => window.ApplySettings(s));
+        }
+
+        // Web asked to reposition — marshal the toggle onto the UI thread.
+        private void OnEnterEditRequested()
+        {
+            var dispatcher = _dispatcher;
+            var window = _window;
+            if (dispatcher == null || window == null) return;
+
+            dispatcher.InvokeAsync(window.EnterEditMode);
+        }
+
+        // Pill committed a dragged position (already on the UI thread). Persist it;
+        // the resulting Changed event re-applies it live.
+        private void OnPositionCommitted(int screenIndex, double x, double y)
+        {
+            var s = _store.Get();
+            s.ScreenIndex = screenIndex;
+            s.Anchor = OverlayAnchor.Custom;
+            s.PositionX = x;
+            s.PositionY = y;
+            _store.Save(s);
         }
     }
 }

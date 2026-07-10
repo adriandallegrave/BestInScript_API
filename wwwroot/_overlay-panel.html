@@ -144,6 +144,27 @@
                 border-color: var(--accent2);
             }
 
+    #bis-ov-drag {
+        background: var(--bg3);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+
+        #bis-ov-drag:hover {
+            border-color: var(--accent2);
+        }
+
+    #bis-ov-custom-note {
+        margin-left: 8px;
+        color: #FFC107;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
     #bis-ov-dialog footer {
         display: flex;
         align-items: center;
@@ -327,6 +348,14 @@
             </div>
 
             <div class="row">
+                <label>Or drag</label>
+                <div>
+                    <button type="button" id="bis-ov-drag">Reposition by dragging</button>
+                    <span id="bis-ov-custom-note" style="display:none">Custom (dragged)</span>
+                </div>
+            </div>
+
+            <div class="row">
                 <label for="bis-ov-margin">Margin</label>
                 <input type="number" id="bis-ov-margin" min="0" max="400" step="2">
             </div>
@@ -440,6 +469,8 @@
             opacity: $('bis-ov-opacity'),
             fontSize: $('bis-ov-fontsize'),
             eventsEnabled: $('bis-ov-events-enabled'),
+            drag: $('bis-ov-drag'),
+            customNote: $('bis-ov-custom-note'),
             save: $('bis-ov-save'),
             saved: $('bis-ov-saved')
         };
@@ -485,6 +516,9 @@
             els.anchors.querySelectorAll('button').forEach(b => {
                 b.classList.toggle('active', b.dataset.a === value);
             });
+            // 'Custom' matches no grid button; show the note so the user knows the
+            // position came from a drag (and picking a grid anchor will replace it).
+            els.customNote.style.display = value === 'Custom' ? '' : 'none';
         }
 
         function applySettings(s) {
@@ -550,6 +584,23 @@
             if (!btn || !current) return;
             current.anchor = btn.dataset.a;
             paintAnchor(current.anchor);
+        });
+
+        // Arm drag-to-position edit mode on the live overlay pill. The user then
+        // drags the pill in-game and clicks ✓/✕ on it — no coordinate guessing.
+        els.drag && els.drag.addEventListener('click', async () => {
+            try {
+                const r = await fetch('/api/overlay/edit-mode', { method: 'POST' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                clearError();
+                els.saved.textContent = 'Drag the pill, then click ✓ to keep or ✕ to cancel';
+                els.saved.classList.remove('error');
+                els.saved.classList.add('show');
+                setTimeout(() => els.saved.classList.remove('show'), 4000);
+            } catch (e) {
+                showError('Could not start drag mode (POST /api/overlay/edit-mode failed): ' + e.message +
+                    '. The overlay only runs on Windows.');
+            }
         });
 
         async function loadScreens() {
@@ -618,6 +669,9 @@
                 screenIndex: parseInt(els.screen.value, 10),
                 anchor: current.anchor || 'TopRight',
                 margin: parseFloat(els.margin.value),
+                // Echo the dragged position so a Save (e.g. opacity tweak) can't wipe it.
+                positionX: current.positionX || 0,
+                positionY: current.positionY || 0,
                 opacity: parseFloat(els.opacity.value),
                 fontSize: parseFloat(els.fontSize.value),
                 eventsEnabled: els.eventsEnabled.checked,

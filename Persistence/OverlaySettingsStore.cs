@@ -121,6 +121,8 @@ namespace BestInScript.API.Persistence
             ScreenIndex = s.ScreenIndex,
             Anchor = s.Anchor,
             Margin = s.Margin,
+            PositionX = s.PositionX,
+            PositionY = s.PositionY,
             Opacity = s.Opacity,
             FontSize = s.FontSize,
             HideWhenIdle = s.HideWhenIdle,

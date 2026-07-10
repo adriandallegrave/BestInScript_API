@@ -18,11 +18,16 @@ namespace BestInScript.API.Controllers
     {
         private readonly OverlaySettingsStore _store;
         private readonly EventScheduleService _events;
+        private readonly OverlayEditModeSignal _editSignal;
 
-        public OverlayController(OverlaySettingsStore store, EventScheduleService events)
+        public OverlayController(
+            OverlaySettingsStore store,
+            EventScheduleService events,
+            OverlayEditModeSignal editSignal)
         {
             _store = store;
             _events = events;
+            _editSignal = editSignal;
         }
 
         // GET /api/overlay/settings
@@ -38,6 +43,19 @@ namespace BestInScript.API.Controllers
             if (settings == null) return BadRequest("Settings body is required.");
             _store.Save(settings);
             return Ok(_store.Get());
+        }
+
+        // POST /api/overlay/edit-mode
+        /// <summary>
+        /// Arm drag-to-position edit mode on the live overlay: the pill drops
+        /// click-through, becomes draggable, and shows ✓/✕ buttons to save or
+        /// cancel. No-op when the overlay isn't running (e.g. non-Windows).
+        /// </summary>
+        [HttpPost("edit-mode")]
+        public IActionResult EnterEditMode()
+        {
+            _editSignal.RequestEnter();
+            return Ok();
         }
 
         // GET /api/overlay/events

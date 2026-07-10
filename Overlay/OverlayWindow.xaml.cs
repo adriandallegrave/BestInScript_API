@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -64,6 +65,9 @@ namespace BestInScript.API.Overlay
         // Alarm blink flashes a countdown between its normal color and this red.
         private static readonly Brush AlarmBrush = Freeze(Color.FromRgb(0xFF, 0x4D, 0x4D));
 
+        // Amber card border while in drag-to-position edit mode.
+        private static readonly Brush EditBorderBrush = Freeze(Color.FromRgb(0xFF, 0xC1, 0x07));
+
         // Shared so we don't allocate a FontFamily per row per refresh.
         private static readonly FontFamily SegoeUiFont = new("Segoe UI");
 
@@ -113,6 +117,18 @@ namespace BestInScript.API.Overlay
 
         // Used to skip rebuilding the row list when nothing visible changed.
         private string _lastSignature = "";
+
+        // ── Drag-to-position edit mode ─────────────────────────────────────
+        private bool _editing;
+        private Brush? _savedBorderBrush;
+        private Thickness _savedThickness;
+
+        /// <summary>
+        /// Raised when the user commits a drag: (screenIndex, PositionX, PositionY)
+        /// with the offsets relative to that screen's top-left in DIP. The hosted
+        /// service persists it so the window itself never touches the store.
+        /// </summary>
+        public event Action<int, double, double>? PositionCommitted;
 
         // ── Construction ───────────────────────────────────────────────────
         public OverlayWindow(HotkeyEngine engine, EventScheduleService events, OverlaySettings initialSettings)
@@ -175,6 +191,108 @@ namespace BestInScript.API.Overlay
             }
         }
 
+        // ── Drag-to-position edit mode ─────────────────────────────────────
+
+        /// <summary>
+        /// Enter edit mode: drop click-through + no-activate so the pill receives
+        /// the mouse, reveal the drag chrome, and force it visible so there is
+        /// always something to grab. Idempotent.
+        /// </summary>
+        public void EnterEditMode()
+        {
+            if (_editing) return;
+            _editing = true;
+
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                // Keep WS_EX_LAYERED (opacity) + WS_EX_TOOLWINDOW; drop transparency
+                // + no-activate so clicks land and the ✓/✕ buttons work.
+                int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
+                SetWindowLong(hwnd, GWL_EXSTYLE, ex & ~(WS_EX_TRANSPARENT | WS_EX_NOACTIVATE));
+            }
+
+            _savedBorderBrush = CardBorder.BorderBrush;
+            _savedThickness = CardBorder.BorderThickness;
+            CardBorder.BorderBrush = EditBorderBrush;
+            CardBorder.BorderThickness = new Thickness(2);
+            EditChrome.Visibility = Visibility.Visible;
+
+            if (Visibility != Visibility.Visible) Show();
+            _lastSignature = "";  // force a rebuild so a row exists even when idle
+            Refresh();
+            Activate();
+        }
+
+        /// <summary>
+        /// Leave edit mode, restoring click-through. When <paramref name="restore"/>
+        /// is true (Cancel), re-applies the persisted settings so the pill jumps
+        /// back; on commit it is false so the pill stays put until the saved
+        /// settings round-trip through <see cref="ApplySettings"/>.
+        /// </summary>
+        private void ExitEditMode(bool restore)
+        {
+            if (!_editing) return;
+            _editing = false;
+
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
+                SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE);
+            }
+
+            EditChrome.Visibility = Visibility.Collapsed;
+            if (_savedBorderBrush != null) CardBorder.BorderBrush = _savedBorderBrush;
+            CardBorder.BorderThickness = _savedThickness;
+
+            if (restore) ApplySettings(_settings);
+        }
+
+        private void CardBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!_editing) return;
+            // The ✓/✕ Buttons mark their own MouseLeftButtonDown handled, so this
+            // only fires for the draggable card surface.
+            try { DragMove(); } catch { /* not the primary button / already released */ }
+        }
+
+        private void EditSave_Click(object sender, RoutedEventArgs e)
+        {
+            var commit = ComputeCommit();
+            ExitEditMode(restore: false);
+            if (commit is { } c) PositionCommitted?.Invoke(c.Index, c.X, c.Y);
+        }
+
+        private void EditCancel_Click(object sender, RoutedEventArgs e) => ExitEditMode(restore: true);
+
+        /// <summary>
+        /// Translate the pill's current top-left into (screenIndex, relative X, relative Y)
+        /// against whichever screen holds the pill's center. Null if no screens.
+        /// </summary>
+        private (int Index, double X, double Y)? ComputeCommit()
+        {
+            var screens = WinFormsScreen.AllScreens;
+            if (screens.Length == 0) return null;
+
+            var (sx, sy) = DeviceScale();
+            var rects = new List<OverlayPositionCalculator.ScreenRect>(screens.Length);
+            foreach (var s in screens)
+            {
+                var b = s.Bounds;
+                rects.Add(new OverlayPositionCalculator.ScreenRect(
+                    b.Left * sx, b.Top * sy, b.Width * sx, b.Height * sy));
+            }
+
+            double w = ActualWidth > 0 ? ActualWidth : 200;
+            double h = ActualHeight > 0 ? ActualHeight : 34;
+
+            int idx = OverlayPositionCalculator.ScreenIndexAt(
+                rects, Left + w / 2, Top + h / 2, fallback: 0);
+            var (relX, relY) = OverlayPositionCalculator.ToRelative(rects[idx], Left, Top);
+            return (idx, relX, relY);
+        }
+
         // ── Status refresh ─────────────────────────────────────────────────
 
         private void Refresh()
@@ -214,7 +332,8 @@ namespace BestInScript.API.Overlay
 
             if (rows.Count == 0)
             {
-                if (_settings.HideWhenIdle)
+                // While editing, never hide — the user needs a pill to grab.
+                if (_settings.HideWhenIdle && !_editing)
                 {
                     if (Visibility == Visibility.Visible) Hide();
                     return;
@@ -224,7 +343,7 @@ namespace BestInScript.API.Overlay
 
             ApplyRows(rows);
 
-            if (_settings.Enabled && Visibility != Visibility.Visible) Show();
+            if ((_settings.Enabled || _editing) && Visibility != Visibility.Visible) Show();
         }
 
         /// <summary>
@@ -382,6 +501,21 @@ namespace BestInScript.API.Overlay
 
         // ── Positioning ────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Physical-pixel → DIP scale for this window. Uses the window's own HWND
+        /// so it picks up the monitor it currently sits on; falls back to 1:1.
+        /// </summary>
+        private (double sx, double sy) DeviceScale()
+        {
+            var src = PresentationSource.FromVisual(this);
+            if (src?.CompositionTarget != null)
+            {
+                var m = src.CompositionTarget.TransformFromDevice;
+                return (m.M11, m.M22);
+            }
+            return (1.0, 1.0);
+        }
+
         private void ApplyPosition(OverlaySettings s)
         {
             var screens = WinFormsScreen.AllScreens;
@@ -397,16 +531,7 @@ namespace BestInScript.API.Overlay
             var b = target.Bounds; // physical pixels
 
             // Convert physical pixels → WPF device-independent pixels.
-            // Uses this window's HWND so we pick up the *target* monitor's DPI
-            // when the window is already on it; falls back to system DPI otherwise.
-            double sx = 1.0, sy = 1.0;
-            var src = PresentationSource.FromVisual(this);
-            if (src?.CompositionTarget != null)
-            {
-                var m = src.CompositionTarget.TransformFromDevice;
-                sx = m.M11;
-                sy = m.M22;
-            }
+            var (sx, sy) = DeviceScale();
 
             double screenLeft = b.Left * sx;
             double screenTop = b.Top * sy;
@@ -416,6 +541,19 @@ namespace BestInScript.API.Overlay
             double w = ActualWidth > 0 ? ActualWidth : 200;
             double h = ActualHeight > 0 ? ActualHeight : 34;
             double m2 = s.Margin;
+
+            // Custom (dragged) position: offset from the target screen's top-left,
+            // clamped so the pill can't be parked fully off-screen.
+            if (s.Anchor == OverlayAnchor.Custom)
+            {
+                var rect = new OverlayPositionCalculator.ScreenRect(
+                    screenLeft, screenTop, screenWidth, screenHeight);
+                var (cx, cy) = OverlayPositionCalculator.ToAbsoluteClamped(
+                    rect, s.PositionX, s.PositionY, w, h);
+                Left = cx;
+                Top = cy;
+                return;
+            }
 
             double x = s.Anchor switch
             {

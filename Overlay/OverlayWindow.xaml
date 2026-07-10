@@ -24,7 +24,58 @@
             BorderBrush="#33FFFFFF"
             BorderThickness="1"
             Padding="10,6"
-            Opacity="0.80">
-        <StackPanel x:Name="RowsPanel" Orientation="Vertical" Grid.IsSharedSizeScope="True"/>
+            Opacity="0.80"
+            MouseLeftButtonDown="CardBorder_MouseLeftButtonDown">
+        <StackPanel Orientation="Vertical">
+
+            <!--
+                Drag-to-position chrome. Collapsed normally; EnterEditMode() shows it,
+                drops WS_EX_TRANSPARENT so the pill takes the mouse, and lets the user
+                drag the card. ✓ saves the position, ✕ reverts. Kept OUTSIDE RowsPanel
+                so the 200 ms Refresh() rebuild never clobbers it.
+            -->
+            <Grid x:Name="EditChrome" Visibility="Collapsed" Margin="0,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Text="⠿ drag to move"
+                           Foreground="#FFC107"
+                           FontFamily="Segoe UI"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+                <Button Grid.Column="1"
+                        x:Name="EditSaveBtn"
+                        Content="✓"
+                        Click="EditSave_Click"
+                        Width="22" Height="20"
+                        Margin="0,0,4,0"
+                        Padding="0"
+                        Foreground="#3DDC84"
+                        Background="#0F1216"
+                        BorderBrush="#3DDC84"
+                        BorderThickness="1"
+                        Cursor="Hand"
+                        ToolTip="Save this position"/>
+                <Button Grid.Column="2"
+                        x:Name="EditCancelBtn"
+                        Content="✕"
+                        Click="EditCancel_Click"
+                        Width="22" Height="20"
+                        Padding="0"
+                        Foreground="#E85252"
+                        Background="#0F1216"
+                        BorderBrush="#E85252"
+                        BorderThickness="1"
+                        Cursor="Hand"
+                        ToolTip="Cancel and keep the old position"/>
+            </Grid>
+
+            <StackPanel x:Name="RowsPanel" Orientation="Vertical" Grid.IsSharedSizeScope="True"/>
+        </StackPanel>
     </Border>
 </Window>

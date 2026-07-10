@@ -12,7 +12,7 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.8.0** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.9.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
@@ -37,7 +37,7 @@ Sources are grouped in folders whose names match their namespaces (`BestInScript
 | Controllers | `Controllers/` — `ScriptsController.cs`, `PresetsController.cs`, `EngineController.cs`, `OverlayController.cs`, `ScreenController.cs`, `ProfilesController.cs` |
 | Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs`, `EventSchedule.cs`, `EventSnapshot.cs`, `EventOverlayConfig.cs` |
 | Persistence | `Persistence/` — `JsonListFileStore.cs` (generic base), `ScriptRepository.cs`, `PresetRepository.cs`, `OverlaySettingsStore.cs`, `DataFilePathResolver.cs`, `ProfileManager.cs` (+ `IProfileScopedStore.cs`), `IScriptRepository.cs`, `IPresetRepository.cs` |
-| Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)`, `OverlayHostedService.cs` |
+| Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)`, `OverlayHostedService.cs`; drag-to-position: `Services/OverlayEditModeSignal.cs` (web→overlay arm) + pure geometry `Engine/OverlayPositionCalculator.cs` |
 | Tray icon | `Tray/TrayIconHostedService.cs` — NotifyIcon on dedicated STA thread (open UI / stop-all / exit); also hosts the single-instance activation listener |
 | Single-instance guard | `Services/SingleInstanceGuard.cs` — `Local\` named mutex gate + auto-reset activation event; gated at the top of `Program.cs`, listener attached by the tray service |
 | Tests | `BestInScript.Tests/` — xUnit, one file per subject; hand-rolled fakes in `Fakes/` |
@@ -143,6 +143,7 @@ The live verdict surfaces to the overlay via `PixelOverlayState` (`NotApplicable
 | `ScriptExecutor` (`IScriptRunner`) | Blind-loop / pixel-gated run loops + step executor with the mandatory randomized delays. |
 | `HotkeyEngine`         | `IHostedService` façade: loads repos, wires hook → coordinator, delegates the public API. |
 | `OverlaySettingsStore` | Holds + persists overlay settings (`overlay-settings.json`). Fires `Changed` event on save. Global — NOT profile-scoped. |
+| `OverlayEditModeSignal` | One-way web→overlay signal (`EnterRequested`) that arms drag-to-position edit mode; the commit direction is handled in-window via `OverlayWindow.PositionCommitted`. |
 | `EventScheduleService` (`IHostedService`) | Diablo 4 event timers. One outbound HTTP GET of `helltides.com/api/schedule` at startup (the app's ONLY network call), cached in memory; `GetSnapshot(now)` returns the next world boss / helltide / legion via `EventScheduleCalculator`. Passive/informational; a failed fetch just hides the rows. Injected into `OverlayWindow` (via `OverlayHostedService`) and `OverlayController`. |
 | `ProfileManager` | Owns the named config profiles and the active pointer. Migrates legacy files into a `Default` profile, then repoints the profile-scoped stores (`IProfileScopedStore`: the two repos) at the active `profiles/<name>/` dir. `HotkeyEngine.SwitchProfile` calls `ClearAll` → `Activate` → reload. |
 | `OverlayHostedService` | `IHostedService`. Spins up `OverlayWindow` (WPF) on a dedicated STA thread. |
@@ -161,6 +162,7 @@ All controllers are under `/api/[controller]`. Swagger UI at `/swagger`.
 | `/api/presets` (CRUD + `/status`)                    | `Preset` CRUD. Trigger keys validated as globally unique across scripts and presets. |
 | `/api/engine/status`, `/api/engine/stop-all`         | Aggregate script status; emergency stop. |
 | `/api/overlay/settings`, `/api/overlay/screens`      | Overlay placement + monitor enumeration (`System.Windows.Forms.Screen`). |
+| `/api/overlay/edit-mode` (POST)                      | Arm drag-to-position edit mode on the live pill (via `OverlayEditModeSignal`). |
 | `/api/overlay/events`                                | Live "next event" snapshot (world boss / helltide / legion) with `H:MM` countdowns — read-only preview for the config UI. |
 | `/api/screen/color`, `/api/screen/cursor`            | Pixel + cursor-position sampling used by the config UI. |
 | `/api/screen/capture/arm`, `/disarm`, `/state`       | Guided in-game capture: arm a hotkey, then two in-game presses grab ready/cooldown color + a coordinate-nudge suggestion; UI polls `/state`. |
@@ -169,6 +171,8 @@ All controllers are under `/api/[controller]`. Swagger UI at `/swagger`.
 ### Overlay
 
 The WPF overlay window (`OverlayWindow`) is a topmost, click-through, taskbar-hidden pill (`WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`). A `DispatcherTimer` polls `HotkeyEngine.GetStatus()` / `GetPresetStatus()` every 200 ms in-process — no HTTP roundtrip. Settings changes from the web UI fire `OverlaySettingsStore.Changed`, which marshals onto the WPF dispatcher to reposition/restyle live.
+
+**Drag-to-position (BACKLOG 4.1):** the web panel's "Reposition by dragging" button `POST`s `/api/overlay/edit-mode`, which raises `OverlayEditModeSignal.EnterRequested`; `OverlayHostedService` marshals `OverlayWindow.EnterEditMode`, which temporarily **drops `WS_EX_TRANSPARENT | WS_EX_NOACTIVATE`** so the pill takes the mouse, shows ✓/✕ chrome (kept outside `RowsPanel` so the 200 ms refresh never clobbers it), and enables `DragMove`. ✓ commits the drag → `PositionCommitted(screenIndex, x, y)` → the hosted service persists `Anchor = Custom` + `PositionX/Y` (DIP offsets from the target screen's top-left); ✕ reverts. `OverlayAnchor.Custom` in `ApplyPosition` clamps to the screen so the pill can't park off-screen. Pure geometry lives in `Engine/OverlayPositionCalculator.cs` (screen-under-point, relative↔absolute, clamp) so it's unit-testable without Win32. The window never writes settings itself.
 
 Only entries with `ShowInOverlay = true` appear. Pixel-triggered scripts show their live pixel state (`READY` / `waiting` / `unreadable`); blind-loop scripts show `ON`.
 

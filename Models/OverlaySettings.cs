@@ -15,7 +15,14 @@ namespace BestInScript.API.Models
         MiddleRight,
         BottomLeft,
         BottomCenter,
-        BottomRight
+        BottomRight,
+
+        /// <summary>
+        /// Free position: ignore the anchor/margin and place the pill at
+        /// <see cref="OverlaySettings.PositionX"/>/<see cref="OverlaySettings.PositionY"/>.
+        /// Set by the drag-to-position edit mode.
+        /// </summary>
+        Custom
     }
 
     /// <summary>
@@ -39,6 +46,18 @@ namespace BestInScript.API.Models
 
         /// <summary>Distance from the chosen edge in DIPs.</summary>
         public double Margin { get; set; } = 12;
+
+        /// <summary>
+        /// Custom top-left X, as a DIP offset from the target screen's top-left.
+        /// Only used when <see cref="Anchor"/> is <see cref="OverlayAnchor.Custom"/>.
+        /// </summary>
+        public double PositionX { get; set; }
+
+        /// <summary>
+        /// Custom top-left Y, as a DIP offset from the target screen's top-left.
+        /// Only used when <see cref="Anchor"/> is <see cref="OverlayAnchor.Custom"/>.
+        /// </summary>
+        public double PositionY { get; set; }
 
         /// <summary>Background alpha 0–1 (the card, not the text).</summary>
         public double Opacity { get; set; } = 0.80;
