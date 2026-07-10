@@ -5,7 +5,17 @@ using BestInScript.API.Services;
 using BestInScript.API.Tray;
 using Microsoft.OpenApi.Models;
 
+// Single-instance gate (BACKLOG 6.2): if the app is already running, signal that instance
+// to open its UI and exit now — before the web host binds Kestrel's port, avoiding a crash.
+var singleInstance = SingleInstanceGuard.Acquire();
+if (!singleInstance.IsPrimary)
+    return; // another instance is live; we signaled it to open its UI
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Registered so the tray service can attach its activation listener and the DI container
+// owns disposal (releasing the mutex on shutdown). Dispose is idempotent.
+builder.Services.AddSingleton(singleInstance);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

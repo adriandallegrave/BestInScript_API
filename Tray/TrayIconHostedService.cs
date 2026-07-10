@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 using BestInScript.API.Engine;
+using BestInScript.API.Services;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 
@@ -21,6 +22,7 @@ namespace BestInScript.API.Tray
         private readonly HotkeyEngine _engine;
         private readonly IServer _server;
         private readonly IHostApplicationLifetime _lifetime;
+        private readonly SingleInstanceGuard _singleInstance;
         private readonly ILogger<TrayIconHostedService> _logger;
 
         private Thread? _uiThread;
@@ -31,11 +33,13 @@ namespace BestInScript.API.Tray
             HotkeyEngine engine,
             IServer server,
             IHostApplicationLifetime lifetime,
+            SingleInstanceGuard singleInstance,
             ILogger<TrayIconHostedService> logger)
         {
             _engine = engine;
             _server = server;
             _lifetime = lifetime;
+            _singleInstance = singleInstance;
             _logger = logger;
         }
 
@@ -79,6 +83,12 @@ namespace BestInScript.API.Tray
             // Wait briefly so the icon is up for early interaction,
             // but don't block startup if WinForms takes its time.
             ready.Wait(TimeSpan.FromSeconds(2));
+
+            // A second launch signals this (primary) instance to surface its UI —
+            // same action as the tray's Open UI. OpenUi only launches the browser,
+            // so it's safe to invoke straight from the listener thread.
+            _singleInstance.ListenForActivation(OpenUi);
+
             _logger.LogInformation("Tray icon started.");
             return Task.CompletedTask;
         }
