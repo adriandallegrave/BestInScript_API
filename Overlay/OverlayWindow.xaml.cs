@@ -312,7 +312,11 @@ namespace BestInScript.API.Overlay
 
             var rows = new List<OvRow>();
 
-            // Active presets first — shown like blind-loop scripts (green dot +
+            // Diablo 4 event timers (world boss / helltide / legion) first, so the
+            // alarms sit above the script/preset rows.
+            AppendEventRows(rows);
+
+            // Active presets next — shown like blind-loop scripts (green dot +
             // "Name · ON"). Presets render above scripts so the overlay reads
             // top-down as "group then members".
             foreach (var p in presets.Where(p => p.IsActive && p.ShowInOverlay))
@@ -325,10 +329,6 @@ namespace BestInScript.API.Overlay
             // on. Both kinds (pixel + blind) share the list; BuildRow picks style.
             foreach (var s in statuses.Where(s => s.IsRunning && s.ShowInOverlay))
                 rows.Add(BuildRow(s));
-
-            // Diablo 4 event timers (world boss / helltide / legion), below the
-            // script/preset rows.
-            AppendEventRows(rows);
 
             if (rows.Count == 0)
             {
