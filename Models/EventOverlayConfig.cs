@@ -10,10 +10,14 @@ namespace BestInScript.API.Models
         /// <summary>Show this event's row in the overlay.</summary>
         public bool Show { get; set; } = true;
 
-        /// <summary>Blink the countdown when within <see cref="AlarmLeadMinutes"/> of the event (no sound).</summary>
+        /// <summary>
+        /// Signal when within <see cref="AlarmLeadMinutes"/> of the event (no sound):
+        /// Helltide/Legion blink a red countdown background; World Boss switches its
+        /// row text to the amber warning color.
+        /// </summary>
         public bool AlarmEnabled { get; set; }
 
-        /// <summary>Minutes before the event at which the alarm blink starts.</summary>
+        /// <summary>Minutes before the event at which the warning/blink starts.</summary>
         public int AlarmLeadMinutes { get; set; } = 5;
 
         /// <summary>Optional row accent [R,G,B]; null = default white label.</summary>
