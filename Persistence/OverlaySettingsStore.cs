@@ -123,7 +123,25 @@ namespace BestInScript.API.Persistence
             Margin = s.Margin,
             Opacity = s.Opacity,
             FontSize = s.FontSize,
-            HideWhenIdle = s.HideWhenIdle
+            HideWhenIdle = s.HideWhenIdle,
+            EventsEnabled = s.EventsEnabled,
+            WorldBoss = CloneEvent(s.WorldBoss),
+            Helltide = CloneEvent(s.Helltide),
+            Legion = CloneEvent(s.Legion)
         };
+
+        private static EventOverlayConfig CloneEvent(EventOverlayConfig? e)
+        {
+            e ??= new EventOverlayConfig();
+            return new EventOverlayConfig
+            {
+                Show = e.Show,
+                AlarmEnabled = e.AlarmEnabled,
+                AlarmLeadMinutes = e.AlarmLeadMinutes,
+                Color = e.Color is { Length: 3 }
+                    ? new[] { e.Color[0], e.Color[1], e.Color[2] }
+                    : null
+            };
+        }
     }
 }

@@ -192,6 +192,99 @@
         #bis-ov-error.show {
             display: block;
         }
+
+    /* Event-timer section */
+    #bis-ov-events {
+        margin-top: 6px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+    }
+
+    .bis-ov-section-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 10px;
+    }
+
+    .bis-ov-evt {
+        background: var(--bg1);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 8px 10px;
+        margin-bottom: 8px;
+    }
+
+        .bis-ov-evt-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .bis-ov-evt-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .bis-ov-evt-preview {
+            font-size: 11px;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bis-ov-evt-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+            .bis-ov-evt-controls .bis-ov-check {
+                margin-bottom: 0;
+                font-size: 12px;
+            }
+
+        .bis-ov-lead {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: var(--text);
+            margin: 0;
+        }
+
+            .bis-ov-lead input[type=number] {
+                width: 52px;
+                padding: 4px 6px;
+            }
+
+        .bis-ov-evt-controls input[type=color] {
+            width: 34px;
+            height: 24px;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: none;
+            cursor: pointer;
+        }
+
+        .bis-ov-color-def {
+            background: var(--bg3);
+            color: var(--muted);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 11px;
+            padding: 3px 7px;
+            cursor: pointer;
+        }
+
+            .bis-ov-color-def:hover {
+                color: var(--text);
+            }
 </style>
 
 <div id="bis-ov-backdrop" role="dialog" aria-modal="true" aria-labelledby="bis-ov-title">
@@ -245,6 +338,56 @@
                 <label for="bis-ov-fontsize">Font size</label>
                 <input type="number" id="bis-ov-fontsize" min="8" max="32" step="1">
             </div>
+
+            <div id="bis-ov-events">
+                <p class="bis-ov-section-title">Diablo 4 event timers</p>
+                <label class="bis-ov-check">
+                    <input type="checkbox" id="bis-ov-events-enabled">
+                    <span>Show world boss / helltide / legion timers</span>
+                </label>
+
+                <div class="bis-ov-evt" data-evt="worldBoss">
+                    <div class="bis-ov-evt-head">
+                        <span class="bis-ov-evt-name">World Boss</span>
+                        <span class="bis-ov-evt-preview" data-preview="worldBoss"></span>
+                    </div>
+                    <div class="bis-ov-evt-controls">
+                        <label class="bis-ov-check"><input type="checkbox" data-k="show"><span>Show</span></label>
+                        <label class="bis-ov-check"><input type="checkbox" data-k="alarm"><span>Alarm</span></label>
+                        <label class="bis-ov-lead">Lead <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
+                        <input type="color" data-k="color" title="Row color">
+                        <button type="button" class="bis-ov-color-def" data-k="colordef">Default</button>
+                    </div>
+                </div>
+
+                <div class="bis-ov-evt" data-evt="helltide">
+                    <div class="bis-ov-evt-head">
+                        <span class="bis-ov-evt-name">Helltide</span>
+                        <span class="bis-ov-evt-preview" data-preview="helltide"></span>
+                    </div>
+                    <div class="bis-ov-evt-controls">
+                        <label class="bis-ov-check"><input type="checkbox" data-k="show"><span>Show</span></label>
+                        <label class="bis-ov-check"><input type="checkbox" data-k="alarm"><span>Alarm</span></label>
+                        <label class="bis-ov-lead">Lead <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
+                        <input type="color" data-k="color" title="Row color">
+                        <button type="button" class="bis-ov-color-def" data-k="colordef">Default</button>
+                    </div>
+                </div>
+
+                <div class="bis-ov-evt" data-evt="legion">
+                    <div class="bis-ov-evt-head">
+                        <span class="bis-ov-evt-name">Legion</span>
+                        <span class="bis-ov-evt-preview" data-preview="legion"></span>
+                    </div>
+                    <div class="bis-ov-evt-controls">
+                        <label class="bis-ov-check"><input type="checkbox" data-k="show"><span>Show</span></label>
+                        <label class="bis-ov-check"><input type="checkbox" data-k="alarm"><span>Alarm</span></label>
+                        <label class="bis-ov-lead">Lead <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
+                        <input type="color" data-k="color" title="Row color">
+                        <button type="button" class="bis-ov-color-def" data-k="colordef">Default</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <footer>
@@ -257,6 +400,21 @@
 <script>
     (function () {
         const $ = id => document.getElementById(id);
+
+        const EVENTS = ['worldBoss', 'helltide', 'legion'];
+
+        // Color <-> [R,G,B], sharing the "white == no override (null)" convention
+        // used by the per-script accent colors elsewhere in the UI.
+        function hexToRgb(hex) {
+            const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+            return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
+        }
+        function rgbToHex(rgb) {
+            if (!Array.isArray(rgb) || rgb.length !== 3) return null;
+            return '#' + rgb.map(v => Math.max(0, Math.min(255, v | 0)).toString(16).padStart(2, '0')).join('');
+        }
+        const evtEl = (evt, k) => document.querySelector('.bis-ov-evt[data-evt="' + evt + '"] [data-k="' + k + '"]');
+        const previewEl = evt => document.querySelector('.bis-ov-evt-preview[data-preview="' + evt + '"]');
 
         // 1. Inject the trigger button into the existing header, just before "Stop All".
         const stopBtn = $('btn-stop-all');
@@ -281,15 +439,23 @@
             margin: $('bis-ov-margin'),
             opacity: $('bis-ov-opacity'),
             fontSize: $('bis-ov-fontsize'),
+            eventsEnabled: $('bis-ov-events-enabled'),
             save: $('bis-ov-save'),
             saved: $('bis-ov-saved')
         };
         let current = null;
 
+        // Reset an event's row color to "default" (white == no override).
+        EVENTS.forEach(evt => {
+            const def = evtEl(evt, 'colordef');
+            if (def) def.addEventListener('click', () => { evtEl(evt, 'color').value = '#ffffff'; });
+        });
+
         // Defaults applied when /api/overlay/settings can't be reached. They
         // mirror the OverlaySettings record so the dialog stays usable as a
         // local-only editor and the user can SEE that the API is broken
         // instead of silently getting nothing on click.
+        const EVT_DEFAULT = { show: true, alarmEnabled: false, alarmLeadMinutes: 5, color: null };
         const DEFAULT_SETTINGS = Object.freeze({
             enabled: false,
             hideWhenIdle: false,
@@ -297,7 +463,11 @@
             anchor: 'TopRight',
             margin: 12,
             opacity: 0.80,
-            fontSize: 12
+            fontSize: 12,
+            eventsEnabled: true,
+            worldBoss: { ...EVT_DEFAULT, alarmEnabled: true },
+            helltide: { ...EVT_DEFAULT },
+            legion: { ...EVT_DEFAULT }
         });
 
         function showError(msg) {
@@ -326,6 +496,15 @@
             els.opacity.value = s.opacity != null ? s.opacity : DEFAULT_SETTINGS.opacity;
             els.fontSize.value = s.fontSize != null ? s.fontSize : DEFAULT_SETTINGS.fontSize;
             paintAnchor(s.anchor || DEFAULT_SETTINGS.anchor);
+
+            els.eventsEnabled.checked = s.eventsEnabled !== false;
+            EVENTS.forEach(evt => {
+                const cfg = s[evt] || EVT_DEFAULT;
+                evtEl(evt, 'show').checked = cfg.show !== false;
+                evtEl(evt, 'alarm').checked = !!cfg.alarmEnabled;
+                evtEl(evt, 'lead').value = cfg.alarmLeadMinutes != null ? cfg.alarmLeadMinutes : 5;
+                evtEl(evt, 'color').value = rgbToHex(cfg.color) || '#ffffff';
+            });
         }
 
         async function open() {
@@ -352,6 +531,7 @@
             }
 
             els.backdrop.classList.add('open');
+            loadEventsPreview();
         }
 
         function close() { els.backdrop.classList.remove('open'); }
@@ -397,6 +577,38 @@
             applySettings(await r.json());
         }
 
+        function setPreview(evt, text) { const el = previewEl(evt); if (el) el.textContent = text; }
+
+        // Read-only reference: show the current live countdowns next to each event.
+        async function loadEventsPreview() {
+            EVENTS.forEach(evt => setPreview(evt, '…'));
+            try {
+                const r = await fetch('/api/overlay/events');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const d = await r.json();
+                if (!d || !d.hasData) { EVENTS.forEach(evt => setPreview(evt, '—')); return; }
+                setPreview('worldBoss', d.worldBoss
+                    ? [d.worldBoss.name, d.worldBoss.zone, d.worldBoss.remaining].filter(Boolean).join(' · ') : '—');
+                setPreview('helltide', d.helltide
+                    ? (d.helltide.active ? 'active · ' : 'starts · ') + d.helltide.remaining : '—');
+                setPreview('legion', d.legion ? d.legion.remaining : '—');
+            } catch (e) {
+                console.warn('[Overlay panel] events preview failed:', e);
+                EVENTS.forEach(evt => setPreview(evt, ''));
+            }
+        }
+
+        // Build one event's config for the save payload (white color == null override).
+        function evtPayload(evt) {
+            const hex = evtEl(evt, 'color').value;
+            return {
+                show: evtEl(evt, 'show').checked,
+                alarmEnabled: evtEl(evt, 'alarm').checked,
+                alarmLeadMinutes: parseInt(evtEl(evt, 'lead').value, 10) || 0,
+                color: hex && hex.toLowerCase() !== '#ffffff' ? hexToRgb(hex) : null
+            };
+        }
+
         els.save.addEventListener('click', async () => {
             if (!current) return;
             els.saved.classList.remove('error');
@@ -407,7 +619,11 @@
                 anchor: current.anchor || 'TopRight',
                 margin: parseFloat(els.margin.value),
                 opacity: parseFloat(els.opacity.value),
-                fontSize: parseFloat(els.fontSize.value)
+                fontSize: parseFloat(els.fontSize.value),
+                eventsEnabled: els.eventsEnabled.checked,
+                worldBoss: evtPayload('worldBoss'),
+                helltide: evtPayload('helltide'),
+                legion: evtPayload('legion')
             };
             try {
                 const r = await fetch('/api/overlay/settings', {

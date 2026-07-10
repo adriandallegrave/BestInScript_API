@@ -25,6 +25,6 @@
             BorderThickness="1"
             Padding="10,6"
             Opacity="0.80">
-        <StackPanel x:Name="RowsPanel" Orientation="Vertical"/>
+        <StackPanel x:Name="RowsPanel" Orientation="Vertical" Grid.IsSharedSizeScope="True"/>
     </Border>
 </Window>

@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using BestInScript.API.Engine;
 using BestInScript.API.Models;
 using BestInScript.API.Persistence;
+using BestInScript.API.Services;
 
 // Application exists in both WPF and WinForms; WinForms is pulled in globally
 // (UseWindowsForms=true) for the Screen API, so alias to WPF here.
@@ -19,6 +20,7 @@ namespace BestInScript.API.Overlay
     {
         private readonly HotkeyEngine _engine;
         private readonly OverlaySettingsStore _store;
+        private readonly EventScheduleService _events;
         private readonly ILogger<OverlayHostedService> _logger;
 
         private Thread? _uiThread;
@@ -28,10 +30,12 @@ namespace BestInScript.API.Overlay
         public OverlayHostedService(
             HotkeyEngine engine,
             OverlaySettingsStore store,
+            EventScheduleService events,
             ILogger<OverlayHostedService> logger)
         {
             _engine = engine;
             _store = store;
+            _events = events;
             _logger = logger;
         }
 
@@ -56,7 +60,7 @@ namespace BestInScript.API.Overlay
                         ShutdownMode = ShutdownMode.OnExplicitShutdown
                     };
 
-                    _window = new OverlayWindow(_engine, _store.Get());
+                    _window = new OverlayWindow(_engine, _events, _store.Get());
                     _dispatcher = app.Dispatcher;
 
                     // Push live settings changes onto the UI thread.

@@ -12,7 +12,7 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.7.0** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.8.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
@@ -32,9 +32,10 @@ Sources are grouped in folders whose names match their namespaces (`BestInScript
 | Input synthesis (`SendInput`, key-name→VK map) | `Services/InputSimulatorService.cs` + `IInputSimulator.cs`; key catalog `Services/KeyNames.cs` |
 | Pixel reading (GDI, color distance) | `Services/ScreenColorService.cs` + `IScreenSampler.cs` |
 | Guided in-game capture (2-pass hotkey + coordinate nudge) | `Services/PixelCaptureService.cs` (armed via `ScriptCoordinator.HandleTriggerKey`; endpoints on `ScreenController`) |
+| Diablo 4 event timers (world boss / helltide / legion) | `Services/EventScheduleService.cs` (one startup HTTP fetch of `helltides.com/api/schedule`, cached), `Engine/EventScheduleCalculator.cs` (pure next-event selection + `H:MM` formatting), models `Models/EventSchedule.cs` / `EventSnapshot.cs` / `EventOverlayConfig.cs`. Rendered by `OverlayWindow`, configured in the overlay panel |
 | Validation (shared by both controllers) | `Services/ConfigValidator.cs` |
 | Controllers | `Controllers/` — `ScriptsController.cs`, `PresetsController.cs`, `EngineController.cs`, `OverlayController.cs`, `ScreenController.cs`, `ProfilesController.cs` |
-| Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs` |
+| Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs`, `EventSchedule.cs`, `EventSnapshot.cs`, `EventOverlayConfig.cs` |
 | Persistence | `Persistence/` — `JsonListFileStore.cs` (generic base), `ScriptRepository.cs`, `PresetRepository.cs`, `OverlaySettingsStore.cs`, `DataFilePathResolver.cs`, `ProfileManager.cs` (+ `IProfileScopedStore.cs`), `IScriptRepository.cs`, `IPresetRepository.cs` |
 | Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)`, `OverlayHostedService.cs` |
 | Tray icon | `Tray/TrayIconHostedService.cs` — NotifyIcon on dedicated STA thread (open UI / stop-all / exit); also hosts the single-instance activation listener |
@@ -142,6 +143,7 @@ The live verdict surfaces to the overlay via `PixelOverlayState` (`NotApplicable
 | `ScriptExecutor` (`IScriptRunner`) | Blind-loop / pixel-gated run loops + step executor with the mandatory randomized delays. |
 | `HotkeyEngine`         | `IHostedService` façade: loads repos, wires hook → coordinator, delegates the public API. |
 | `OverlaySettingsStore` | Holds + persists overlay settings (`overlay-settings.json`). Fires `Changed` event on save. Global — NOT profile-scoped. |
+| `EventScheduleService` (`IHostedService`) | Diablo 4 event timers. One outbound HTTP GET of `helltides.com/api/schedule` at startup (the app's ONLY network call), cached in memory; `GetSnapshot(now)` returns the next world boss / helltide / legion via `EventScheduleCalculator`. Passive/informational; a failed fetch just hides the rows. Injected into `OverlayWindow` (via `OverlayHostedService`) and `OverlayController`. |
 | `ProfileManager` | Owns the named config profiles and the active pointer. Migrates legacy files into a `Default` profile, then repoints the profile-scoped stores (`IProfileScopedStore`: the two repos) at the active `profiles/<name>/` dir. `HotkeyEngine.SwitchProfile` calls `ClearAll` → `Activate` → reload. |
 | `OverlayHostedService` | `IHostedService`. Spins up `OverlayWindow` (WPF) on a dedicated STA thread. |
 | `TrayIconHostedService` | `IHostedService`. System-tray `NotifyIcon` on a dedicated STA thread; menu: open UI, stop-all, exit. Resolves the UI URL lazily from `IServerAddressesFeature`. Attaches `SingleInstanceGuard.ListenForActivation(OpenUi)` so a second launch surfaces this instance's UI. |
@@ -159,6 +161,7 @@ All controllers are under `/api/[controller]`. Swagger UI at `/swagger`.
 | `/api/presets` (CRUD + `/status`)                    | `Preset` CRUD. Trigger keys validated as globally unique across scripts and presets. |
 | `/api/engine/status`, `/api/engine/stop-all`         | Aggregate script status; emergency stop. |
 | `/api/overlay/settings`, `/api/overlay/screens`      | Overlay placement + monitor enumeration (`System.Windows.Forms.Screen`). |
+| `/api/overlay/events`                                | Live "next event" snapshot (world boss / helltide / legion) with `H:MM` countdowns — read-only preview for the config UI. |
 | `/api/screen/color`, `/api/screen/cursor`            | Pixel + cursor-position sampling used by the config UI. |
 | `/api/screen/capture/arm`, `/disarm`, `/state`       | Guided in-game capture: arm a hotkey, then two in-game presses grab ready/cooldown color + a coordinate-nudge suggestion; UI polls `/state`. |
 | `/api/profiles` (list, create, `/{name}/activate`, rename, delete) | Named config profiles. `activate` routes through `HotkeyEngine.SwitchProfile` (stops runs, repoints stores, reloads). |
@@ -168,6 +171,8 @@ All controllers are under `/api/[controller]`. Swagger UI at `/swagger`.
 The WPF overlay window (`OverlayWindow`) is a topmost, click-through, taskbar-hidden pill (`WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`). A `DispatcherTimer` polls `HotkeyEngine.GetStatus()` / `GetPresetStatus()` every 200 ms in-process — no HTTP roundtrip. Settings changes from the web UI fire `OverlaySettingsStore.Changed`, which marshals onto the WPF dispatcher to reposition/restyle live.
 
 Only entries with `ShowInOverlay = true` appear. Pixel-triggered scripts show their live pixel state (`READY` / `waiting` / `unreadable`); blind-loop scripts show `ON`.
+
+Below the script/preset rows, the enabled Diablo 4 event timers render as an aligned three-column block (name / region / `H:MM` countdown) using WPF shared-size columns (`Grid.IsSharedSizeScope` on `RowsPanel`). Helltide shows `active` (time until it ends) or `locked` (time until the next start). A per-event alarm flashes the countdown red for the last `AlarmLeadMinutes`; the blink phase is driven off the existing 200 ms poll and folded into the row signature (no Storyboard).
 
 ### Models
 
@@ -188,7 +193,9 @@ Per-profile: `profiles/<name>/scripts.json` + `profiles/<name>/presets.json`. Gl
 
 The stores are registered as concrete singletons in `Program.cs` with their interfaces forwarded to the same instance, so `ProfileManager` repoints the exact stores that controllers, the validator, and the engine all use. `DataFilePathResolver.Resolve`'s absolute per-file overrides (`BestInScript:DataFilePath` etc.) still set each store's *initial* path but are superseded once `ProfileManager` rebinds to the active profile.
 
-Config keys: `BestInScript:DataDirectory`, `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`. The default `appsettings.json` ships `DataDirectory: C:\temp`.
+Config keys: `BestInScript:DataDirectory`, `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`, `BestInScript:ScheduleApiUrl` (event-timer source, default `https://helltides.com/api/schedule`), `BestInScript:EventsEnabled` (default true). The default `appsettings.json` ships `DataDirectory: C:\temp`.
+
+`overlay-settings.json` also carries the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `AlarmLeadMinutes`, `Color`). These are additive — old files load with defaults (world-boss alarm on at 5 min, helltide/legion alarms off). `OverlaySettingsStore.Clone` deep-copies them.
 
 ## Constraints
 

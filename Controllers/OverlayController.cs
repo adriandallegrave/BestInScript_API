@@ -1,5 +1,7 @@
+using BestInScript.API.Engine;
 using BestInScript.API.Models;
 using BestInScript.API.Persistence;
+using BestInScript.API.Services;
 using Microsoft.AspNetCore.Mvc;
 using WinFormsScreen = System.Windows.Forms.Screen;
 
@@ -15,8 +17,13 @@ namespace BestInScript.API.Controllers
     public class OverlayController : ControllerBase
     {
         private readonly OverlaySettingsStore _store;
+        private readonly EventScheduleService _events;
 
-        public OverlayController(OverlaySettingsStore store) => _store = store;
+        public OverlayController(OverlaySettingsStore store, EventScheduleService events)
+        {
+            _store = store;
+            _events = events;
+        }
 
         // GET /api/overlay/settings
         /// <summary>Current overlay placement / appearance settings.</summary>
@@ -31,6 +38,41 @@ namespace BestInScript.API.Controllers
             if (settings == null) return BadRequest("Settings body is required.");
             _store.Save(settings);
             return Ok(_store.Get());
+        }
+
+        // GET /api/overlay/events
+        /// <summary>
+        /// Live "next event" snapshot (world boss / helltide / legion) with
+        /// formatted H:MM countdowns, so the config UI can show a reference preview.
+        /// </summary>
+        [HttpGet("events")]
+        public ActionResult<object> Events()
+        {
+            var now = DateTimeOffset.UtcNow;
+            long nowUnix = now.ToUnixTimeSeconds();
+            var s = _events.GetSnapshot(now);
+            return Ok(new
+            {
+                hasData = s.HasData,
+                worldBoss = s.Boss == null ? null : new
+                {
+                    name = s.Boss.Name,
+                    zone = s.Boss.Zone,
+                    remaining = EventScheduleCalculator.FormatRemaining(s.Boss.StartUnix, nowUnix),
+                    startUnix = s.Boss.StartUnix
+                },
+                legion = s.LegionStartUnix == null ? null : new
+                {
+                    remaining = EventScheduleCalculator.FormatRemaining(s.LegionStartUnix.Value, nowUnix),
+                    startUnix = s.LegionStartUnix.Value
+                },
+                helltide = s.Helltide == null ? null : new
+                {
+                    active = s.Helltide.Active,
+                    remaining = EventScheduleCalculator.FormatRemaining(s.Helltide.TargetUnix, nowUnix),
+                    targetUnix = s.Helltide.TargetUnix
+                }
+            });
         }
 
         // GET /api/overlay/screens

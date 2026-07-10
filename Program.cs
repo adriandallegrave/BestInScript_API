@@ -58,6 +58,12 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
 builder.Services.AddSingleton<OverlaySettingsStore>();
 builder.Services.AddHostedService<OverlayHostedService>();
 
+// ── Diablo 4 event timers (world boss / helltide / legion) ──────────────────
+// One startup HTTP fetch of the public schedule, cached in memory; the overlay
+// polls it for live countdowns. This is the app's only outbound network call.
+builder.Services.AddSingleton<EventScheduleService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EventScheduleService>());
+
 // ── System tray icon ───────────────────────────────────────────────────────
 // Quick actions while the app runs in the background: open UI, stop-all, exit.
 builder.Services.AddHostedService<TrayIconHostedService>();
