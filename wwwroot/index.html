@@ -14,19 +14,21 @@
         }
 
         :root {
-            --bg0: #09090e;
-            --bg1: #111118;
-            --bg2: #1a1a25;
-            --bg3: #22222f;
-            --border: #2e2e40;
-            --accent: #e8882a;
-            --accent2: #ffaa55;
-            --green: #3ecf6e;
-            --red: #e85252;
-            --text: #d4cfc8;
-            --muted: #7a7590;
-            --radius: 8px;
+            --bg0: #17130f;
+            --bg1: #1e1915;
+            --bg2: #262019;
+            --bg3: #302820;
+            --border: #3a2f26;
+            --accent: #d97757;
+            --accent2: #e9a088;
+            --green: #6ba368;
+            --red: #d96b5a;
+            --text: #ede6dc;
+            --muted: #9a8c7d;
+            --ink: #20160f;
+            --radius: 10px;
             --font: 'Segoe UI', system-ui, sans-serif;
+            --font-display: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
         }
 
         html, body {
@@ -103,11 +105,11 @@
         }
 
             #header h1 {
-                font-size: 18px;
+                font-family: var(--font-display);
+                font-size: 20px;
                 font-weight: 700;
-                letter-spacing: .06em;
+                letter-spacing: .02em;
                 color: var(--accent);
-                text-transform: uppercase;
             }
 
             #header .tagline {
@@ -184,7 +186,7 @@
 
         #main {
             display: grid;
-            grid-template-columns: 300px 1fr;
+            grid-template-columns: 340px 1fr;
             overflow: hidden;
         }
 
@@ -200,10 +202,23 @@
         .sidebar-section {
             display: flex;
             flex-direction: column;
-            flex: 1;
-            min-height: 120px;
             overflow: hidden;
         }
+
+            /* Scripts fill all remaining height; the list scrolls only on true overflow. */
+            #scripts-section {
+                flex: 1 1 auto;
+                min-height: 0;
+            }
+
+            /* Presets size to content up to a cap, so one preset no longer eats half the sidebar. */
+            #presets-section {
+                flex: 0 0 auto;
+            }
+
+                #presets-section .sidebar-list {
+                    max-height: clamp(120px, 26vh, 260px);
+                }
 
             .sidebar-section + .sidebar-section {
                 border-top: 1px solid var(--border);
@@ -218,16 +233,16 @@
 
             .sidebar-head span {
                 flex: 1;
+                font-family: var(--font-display);
                 font-weight: 700;
-                font-size: 13px;
-                text-transform: uppercase;
-                letter-spacing: .05em;
-                color: var(--muted);
+                font-size: 15px;
+                letter-spacing: .01em;
+                color: var(--text);
             }
 
         #btn-new, #btn-new-preset {
             background: var(--accent);
-            color: #000;
+            color: var(--ink);
             padding: 7px 14px;
             font-weight: 700;
         }
@@ -235,7 +250,7 @@
         .sidebar-list {
             flex: 1;
             overflow-y: auto;
-            padding: 0 8px 8px;
+            padding: 4px 8px 8px;
         }
 
             .sidebar-list::-webkit-scrollbar {
@@ -319,9 +334,9 @@
         .script-card {
             background: var(--bg2);
             border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 11px 13px;
-            margin-bottom: 6px;
+            border-radius: 8px;
+            padding: 9px 11px;
+            margin-bottom: 5px;
             cursor: pointer;
             transition: border-color .15s, background .15s;
             display: flex;
@@ -343,11 +358,11 @@
                 background: var(--bg0);
                 border: 1px solid var(--border);
                 border-radius: 5px;
-                padding: 3px 8px;
+                padding: 3px 7px;
                 font-size: 12px;
                 font-weight: 700;
                 color: var(--accent2);
-                min-width: 34px;
+                min-width: 30px;
                 text-align: center;
                 font-family: monospace;
                 flex-shrink: 0;
@@ -373,9 +388,9 @@
             }
 
             .script-card .running-pill {
-                background: #1d3d28;
+                background: #29331f;
                 color: var(--green);
-                border: 1px solid #2e6645;
+                border: 1px solid #47562f;
                 border-radius: 20px;
                 font-size: 10px;
                 padding: 2px 8px;
@@ -414,15 +429,18 @@
             background: var(--bg1);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 20px;
+            padding: 22px;
+            width: 100%;
+            max-width: 960px;
+            align-self: center;
         }
 
         .panel-title {
-            font-size: 13px;
+            font-family: var(--font-display);
+            font-size: 16px;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: .06em;
-            color: var(--muted);
+            letter-spacing: .01em;
+            color: var(--text);
             margin-bottom: 16px;
         }
 
@@ -475,7 +493,7 @@
 
             #btn-capture.listening {
                 background: var(--accent);
-                color: #000;
+                color: var(--ink);
                 border-color: var(--accent);
             }
 
@@ -518,7 +536,7 @@
                 background: var(--accent);
                 border-radius: 50%;
                 cursor: pointer;
-                box-shadow: 0 0 4px rgba(232,136,42,.5);
+                box-shadow: 0 0 4px rgba(217,119,87,.5);
             }
 
         /* Steps builder */
@@ -644,6 +662,9 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            width: 100%;
+            max-width: 960px;
+            align-self: center;
         }
 
             .action-bar .spacer {
@@ -652,7 +673,7 @@
 
         #btn-save {
             background: var(--accent);
-            color: #000;
+            color: var(--ink);
             font-weight: 700;
             padding: 9px 22px;
         }
@@ -804,7 +825,7 @@
 
                 .switch input:checked + .slider::before {
                     transform: translateX(19px);
-                    background: #000;
+                    background: var(--ink);
                 }
 
         .pt-disabled-note {
@@ -829,11 +850,11 @@
         }
 
         .pt-sub-title {
-            font-size: 11px;
+            font-family: var(--font-display);
+            font-size: 13px;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: .05em;
-            color: var(--muted);
+            letter-spacing: .01em;
+            color: var(--text);
             margin-bottom: 12px;
         }
 
@@ -858,7 +879,7 @@
 
             .btn-sample.counting {
                 background: var(--accent);
-                color: #000;
+                color: var(--ink);
                 border-color: var(--accent);
             }
 
@@ -933,9 +954,9 @@
         }
 
             .pt-verdict.ready {
-                background: #1d3d28;
+                background: #29331f;
                 color: var(--green);
-                border: 1px solid #2e6645;
+                border: 1px solid #47562f;
             }
 
             .pt-verdict.waiting {
@@ -983,14 +1004,14 @@
 
             <!-- Sidebar -->
             <aside id="sidebar">
-                <div class="sidebar-section">
+                <div class="sidebar-section" id="scripts-section">
                     <div class="sidebar-head">
                         <span>Scripts</span>
                         <button id="btn-new">+ New</button>
                     </div>
                     <div id="script-list" class="sidebar-list"></div>
                 </div>
-                <div class="sidebar-section">
+                <div class="sidebar-section" id="presets-section">
                     <div class="sidebar-head">
                         <span>Presets</span>
                         <button id="btn-new-preset">+ New</button>
@@ -2612,7 +2633,7 @@
 
         #bis-ov-save {
             background: var(--accent);
-            color: #1a1a25;
+            color: var(--ink);
             padding: 7px 16px;
             border: none;
             font-weight: 600;
@@ -2638,8 +2659,8 @@
             display: none;
             margin: 0 18px 12px;
             padding: 8px 10px;
-            background: rgba(232, 82, 82, .12);
-            border: 1px solid rgba(232, 82, 82, .4);
+            background: rgba(217, 107, 90, .12);
+            border: 1px solid rgba(217, 107, 90, .4);
             border-radius: var(--radius);
             color: var(--red);
             font-size: 12px;
