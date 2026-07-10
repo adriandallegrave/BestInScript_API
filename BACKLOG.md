@@ -54,7 +54,7 @@ The **#** column numbers each item (`section.item`); **Shipped** marks released 
 | # | Shipped | Feature | Description | Effort |
 |---|---------|---------|-------------|--------|
 | 6.1 | ✅ 1.1.0 | **Tray icon** | Minimize to tray with quick actions: open UI, stop-all, exit. | M |
-| 6.2 | | **Single-instance guard** | A second launch focuses the existing instance instead of crashing on a port conflict. | S |
+| 6.2 | ✅ 1.6.0 | **Single-instance guard** | A second launch focuses the existing instance instead of crashing on a port conflict. | S |
 | 6.3 | | **Fire/event log + viewer** | Structured log of script start/stop, pixel fires, unreadable streaks, with a web UI viewer. Answers "why didn't it cast". | M |
 | 6.4 | | **Fix overlay-settings-panel paste debt** | Replace the manual paste of `overlay-settings-panel.html` into `index.html` with a build-time include or runtime fetch. Pure tech debt. | S |
 | 6.5 | | **Live status via SSE** | Replace web UI status polling with server-sent events. Nice-to-have. | M |

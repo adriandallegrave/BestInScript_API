@@ -12,7 +12,7 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.5.0** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.6.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
@@ -37,7 +37,8 @@ Sources are grouped in folders whose names match their namespaces (`BestInScript
 | Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs` |
 | Persistence | `Persistence/` — `JsonListFileStore.cs` (generic base), `ScriptRepository.cs`, `PresetRepository.cs`, `OverlaySettingsStore.cs`, `DataFilePathResolver.cs`, `ProfileManager.cs` (+ `IProfileScopedStore.cs`), `IScriptRepository.cs`, `IPresetRepository.cs` |
 | Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)`, `OverlayHostedService.cs` |
-| Tray icon | `Tray/TrayIconHostedService.cs` — NotifyIcon on dedicated STA thread (open UI / stop-all / exit) |
+| Tray icon | `Tray/TrayIconHostedService.cs` — NotifyIcon on dedicated STA thread (open UI / stop-all / exit); also hosts the single-instance activation listener |
+| Single-instance guard | `Services/SingleInstanceGuard.cs` — `Local\` named mutex gate + auto-reset activation event; gated at the top of `Program.cs`, listener attached by the tray service |
 | Tests | `BestInScript.Tests/` — xUnit, one file per subject; hand-rolled fakes in `Fakes/` |
 | Web UI | `wwwroot/index.html` (+ `overlay-settings-panel.html`, manually pasted in); app icon `wwwroot/app.ico` (tray + favicon + exe), located at runtime by `Services/WebAssetLocator.cs` |
 | Config | `appsettings.json` (`BestInScript:DataDirectory` → `C:\temp`) |
@@ -143,7 +144,8 @@ The live verdict surfaces to the overlay via `PixelOverlayState` (`NotApplicable
 | `OverlaySettingsStore` | Holds + persists overlay settings (`overlay-settings.json`). Fires `Changed` event on save. Global — NOT profile-scoped. |
 | `ProfileManager` | Owns the named config profiles and the active pointer. Migrates legacy files into a `Default` profile, then repoints the profile-scoped stores (`IProfileScopedStore`: the two repos) at the active `profiles/<name>/` dir. `HotkeyEngine.SwitchProfile` calls `ClearAll` → `Activate` → reload. |
 | `OverlayHostedService` | `IHostedService`. Spins up `OverlayWindow` (WPF) on a dedicated STA thread. |
-| `TrayIconHostedService` | `IHostedService`. System-tray `NotifyIcon` on a dedicated STA thread; menu: open UI, stop-all, exit. Resolves the UI URL lazily from `IServerAddressesFeature`. |
+| `TrayIconHostedService` | `IHostedService`. System-tray `NotifyIcon` on a dedicated STA thread; menu: open UI, stop-all, exit. Resolves the UI URL lazily from `IServerAddressesFeature`. Attaches `SingleInstanceGuard.ListenForActivation(OpenUi)` so a second launch surfaces this instance's UI. |
+| `SingleInstanceGuard` | Single-instance gate (BACKLOG 6.2). `Local\` named mutex + auto-reset event. `Acquire()` runs at the top of `Program.cs` before the web host; a non-primary launch signals the primary to open its UI and exits. Registered as a singleton so DI owns disposal. Windows-only (no-op elsewhere). |
 
 Testing seams (`IInputSimulator`, `IScreenSampler`, `IDelayScheduler`, `IRandomSource`, `IScriptRunner`, the repo interfaces) each have exactly one production implementation; tests swap in hand-rolled fakes from `BestInScript.Tests/Fakes/`. `TaskDelayScheduler` and `SharedRandomSource` forward to `Task.Delay` / `Random.Shared`, so production timing is unchanged.
 
