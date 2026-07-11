@@ -41,6 +41,14 @@ namespace BestInScript.API.Controllers
         public ActionResult<OverlaySettings> Update([FromBody] OverlaySettings settings)
         {
             if (settings == null) return BadRequest("Settings body is required.");
+
+            // Emergency stop-all hotkey: keyboard keys only (mouse buttons and unknown names
+            // rejected). Empty/null is allowed and disables the hotkey.
+            if (!string.IsNullOrWhiteSpace(settings.StopAllHotkey)
+                && !InputSimulatorService.IsValidTriggerKey(settings.StopAllHotkey))
+                return BadRequest(
+                    $"'{settings.StopAllHotkey}' is not a valid stop-all hotkey (keyboard keys only).");
+
             _store.Save(settings);
             return Ok(_store.Get());
         }

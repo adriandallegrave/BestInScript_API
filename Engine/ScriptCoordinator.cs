@@ -37,6 +37,10 @@ namespace BestInScript.API.Engine
         // Guards all owner-set mutations + start/stop transitions.
         private readonly object _toggleLock = new();
 
+        // VK of the global emergency-stop hotkey (BACKLOG 1.1); 0 = disabled.
+        // Read lock-free in HandleTriggerKey on the hook thread; set from HotkeyEngine.
+        private volatile int _stopAllVk;
+
         public ScriptCoordinator(ILogger<ScriptCoordinator> logger, IScriptRunner runner, PixelCaptureService capture)
         {
             _logger = logger;
@@ -221,6 +225,13 @@ namespace BestInScript.API.Engine
         }
 
         /// <summary>
+        /// Sets (or clears, with 0) the VK that triggers <see cref="StopAll"/> when pressed
+        /// in-game. Called by <see cref="HotkeyEngine"/> at startup and whenever the overlay
+        /// settings change. Thread-safe via the volatile field.
+        /// </summary>
+        public void SetStopAllKey(ushort vk) => _stopAllVk = vk;
+
+        /// <summary>
         /// Shutdown path: cancel every running task WITHOUT clearing owners or
         /// deactivating presets — distinct from <see cref="StopAll"/>, which is
         /// the user-facing emergency stop.
@@ -264,6 +275,16 @@ namespace BestInScript.API.Engine
             // samples the screen instead of toggling any script/preset bound to the same key.
             if (_capture.TryConsumeKey(vkCode))
                 return;
+
+            // Global emergency-stop hotkey wins over everything else: if it collides with a
+            // script/preset trigger, the press stops all rather than toggling (safety-first).
+            var stopVk = _stopAllVk;
+            if (stopVk != 0 && vkCode == stopVk)
+            {
+                _logger.LogInformation("Emergency stop-all hotkey pressed (VK=0x{VK:X2})", vkCode);
+                StopAll();
+                return;
+            }
 
             if (_scriptRegistry.TryGetValue(vkCode, out var script))
             {

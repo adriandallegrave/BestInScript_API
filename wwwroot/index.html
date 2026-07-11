@@ -147,6 +147,55 @@
             border: 1px solid var(--border);
         }
 
+        /* Global emergency-stop hotkey control (BACKLOG 1.1). */
+        #panic-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 8px;
+        }
+
+            #panic-bar .panic-label {
+                color: var(--muted);
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: .05em;
+            }
+
+            #panic-key {
+                background: var(--bg0);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 5px 10px;
+                font-family: monospace;
+                font-size: 13px;
+                font-weight: 700;
+                color: var(--accent2);
+                min-width: 46px;
+                text-align: center;
+                letter-spacing: .04em;
+            }
+
+                #panic-key.off {
+                    color: var(--muted);
+                    font-weight: 400;
+                }
+
+            #panic-bar button {
+                background: var(--bg3);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+
+                #panic-bar button.listening {
+                    background: var(--accent);
+                    color: var(--ink);
+                    border-color: var(--accent);
+                }
+
         #profile-bar {
             display: flex;
             align-items: center;
@@ -996,6 +1045,12 @@
             </div>
             <div id="status-dot"></div>
             <span id="status-label">Checking…</span>
+            <div id="panic-bar" title="Global emergency-stop hotkey — press it anywhere to stop all scripts">
+                <span class="panic-label">Panic</span>
+                <span id="panic-key" class="off">off</span>
+                <button id="panic-capture" type="button">Set</button>
+                <button id="panic-clear" type="button" title="Disable the panic hotkey">✕</button>
+            </div>
             <button id="btn-stop-all">■ Stop All</button>
         </header>
 
@@ -1043,7 +1098,7 @@
             ...Array.from({ length: 10 }, (_, i) => String(i)),
             ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`),
             ...Array.from({ length: 10 }, (_, i) => `NumPad${i}`),
-            'Space', 'Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Insert',
+            'Space', 'Enter', 'Tab', 'Escape', 'Pause', 'Backspace', 'Delete', 'Insert',
             'Home', 'End', 'PageUp', 'PageDown', 'Up', 'Down', 'Left', 'Right',
             'Shift', 'LShift', 'RShift', 'Ctrl', 'LCtrl', 'RCtrl', 'Alt', 'LAlt', 'RAlt',
             'Multiply', 'Add', 'Subtract', 'Decimal', 'Divide',
@@ -1745,6 +1800,7 @@
             if (code.startsWith('F') && !isNaN(code.slice(1))) return code; // F1..F12
             const map = {
                 'Space': 'Space', 'Enter': 'Enter', 'Tab': 'Tab', 'Escape': 'Escape',
+                'Pause': 'Pause',
                 'Backspace': 'Backspace', 'Delete': 'Delete', 'Insert': 'Insert',
                 'Home': 'Home', 'End': 'End', 'PageUp': 'PageUp', 'PageDown': 'PageDown',
                 'ArrowUp': 'Up', 'ArrowDown': 'Down', 'ArrowLeft': 'Left', 'ArrowRight': 'Right',
@@ -2520,6 +2576,81 @@
                 toast('All scripts stopped.', 'success');
             } catch { toast('Could not reach API.', 'error'); }
         });
+
+        // ── Global emergency-stop hotkey (BACKLOG 1.1) ─────────────────────────────────
+        (function () {
+            const keyEl = document.getElementById('panic-key');
+            const capBtn = document.getElementById('panic-capture');
+            const clrBtn = document.getElementById('panic-clear');
+            let panicCapturing = false;
+
+            function paint(key) {
+                if (key) { keyEl.textContent = key; keyEl.classList.remove('off'); }
+                else { keyEl.textContent = 'off'; keyEl.classList.add('off'); }
+            }
+
+            async function loadPanic() {
+                try {
+                    const r = await fetch(`${API}/overlay/settings`);
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    paint((await r.json()).stopAllHotkey);
+                } catch { /* leave "off"; overlay controller may be missing in this build */ }
+            }
+
+            // PUT replaces the whole OverlaySettings, so GET first and change only the one field.
+            async function savePanic(keyOrNull) {
+                let settings;
+                try {
+                    const r = await fetch(`${API}/overlay/settings`);
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    settings = await r.json();
+                } catch { toast('Could not read overlay settings.', 'error'); return; }
+
+                settings.stopAllHotkey = keyOrNull;
+                try {
+                    const r = await fetch(`${API}/overlay/settings`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(settings)
+                    });
+                    if (!r.ok) { toast(await r.text() || ('Save failed (HTTP ' + r.status + ')'), 'error'); return; }
+                    paint((await r.json()).stopAllHotkey);
+                    toast(keyOrNull ? `Panic hotkey set to ${keyOrNull}.` : 'Panic hotkey disabled.', 'success');
+                } catch { toast('Could not save overlay settings.', 'error'); }
+            }
+
+            capBtn.addEventListener('click', () => {
+                if (panicCapturing) return;
+                panicCapturing = true;
+                capBtn.classList.add('listening');
+                capBtn.textContent = '⌨ Press…';
+                keyEl.textContent = '…';
+
+                function reset() {
+                    panicCapturing = false;
+                    capBtn.classList.remove('listening');
+                    capBtn.textContent = 'Set';
+                    document.removeEventListener('keydown', onKey, true);
+                }
+                function onKey(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.code === 'Escape') { loadPanic(); reset(); return; }
+                    const name = mapEventKey(e);
+                    reset();
+                    if (!name || !TRIGGER_KEYS.includes(name)) {
+                        toast('Invalid panic key (keyboard keys only).', 'error');
+                        loadPanic();
+                        return;
+                    }
+                    savePanic(name);
+                }
+                document.addEventListener('keydown', onKey, true);
+            });
+
+            clrBtn.addEventListener('click', () => savePanic(null));
+            loadPanic();
+        })();
 
         // ── New script / preset ───────────────────────────────────────────────────────
         document.getElementById('btn-new').addEventListener('click', newScript);

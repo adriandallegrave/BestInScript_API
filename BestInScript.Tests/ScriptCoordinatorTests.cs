@@ -200,6 +200,64 @@ public class ScriptCoordinatorTests
     }
 
     [Fact]
+    public void StopAllHotkey_Pressed_StopsAll()
+    {
+        var s1 = Script("s1", "F1");
+        var s2 = Script("s2", "F2");
+        _coordinator.RegisterScript(s1);
+        _coordinator.RegisterScript(s2);
+        _coordinator.RegisterPreset(Preset("p", "F5", s2.Id));
+        _coordinator.SetStopAllKey(Vk("F9"));
+
+        _coordinator.HandleTriggerKey(Vk("F1")); // user claims s1
+        _coordinator.HandleTriggerKey(Vk("F5")); // preset claims s2
+
+        _coordinator.HandleTriggerKey(Vk("F9")); // emergency stop-all hotkey
+
+        Assert.False(IsRunning(s1.Id));
+        Assert.False(IsRunning(s2.Id));
+        Assert.False(_coordinator.GetPresetStatus().Single().IsActive);
+    }
+
+    [Fact]
+    public void StopAllHotkey_TakesPrecedenceOverScript_OnSameVk()
+    {
+        var s = Script("s", "F1");
+        _coordinator.RegisterScript(s);
+        _coordinator.SetStopAllKey(Vk("F1")); // panic bound to the same key as the script
+
+        _coordinator.HandleTriggerKey(Vk("F1"));
+
+        // Stop-all won — the script must not have toggled on.
+        Assert.False(IsRunning(s.Id));
+    }
+
+    [Fact]
+    public void StopAllHotkey_Disabled_LeavesTogglesUnaffected()
+    {
+        var s = Script("s", "F1");
+        _coordinator.RegisterScript(s);
+        // _stopAllVk defaults to 0 (disabled); SetStopAllKey never called.
+
+        _coordinator.HandleTriggerKey(Vk("F1"));
+
+        Assert.True(IsRunning(s.Id));
+    }
+
+    [Fact]
+    public void SetStopAllKey_Zero_DisablesAndRestoresNormalToggle()
+    {
+        var s = Script("s", "F1");
+        _coordinator.RegisterScript(s);
+        _coordinator.SetStopAllKey(Vk("F1"));
+        _coordinator.SetStopAllKey(0); // clear the panic key
+
+        _coordinator.HandleTriggerKey(Vk("F1")); // now a normal toggle again
+
+        Assert.True(IsRunning(s.Id));
+    }
+
+    [Fact]
     public void CancelAllRunning_KeepsOwners()
     {
         var s = Script("s", "F1");

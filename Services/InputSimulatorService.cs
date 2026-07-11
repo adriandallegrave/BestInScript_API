@@ -22,7 +22,7 @@ namespace BestInScript.API.Services
     ///   Numbers  : 0-9 (top row)
     ///   F-keys   : F1-F12
     ///   Modifiers: Shift/LShift/RShift, Ctrl/LCtrl/RCtrl, Alt/LAlt/RAlt
-    ///   Special  : Space, Enter, Tab, Escape, Backspace, Delete, Insert,
+    ///   Special  : Space, Enter, Tab, Escape, Pause, Backspace, Delete, Insert,
     ///              Up, Down, Left, Right, Home, End, PageUp, PageDown
     ///   Numpad   : NumPad0-NumPad9, Multiply, Add, Subtract, Decimal, Divide
     ///   Mouse    : Mouse1 (left), Mouse2 (right), Mouse3 (middle),
@@ -238,6 +238,7 @@ namespace BestInScript.API.Services
                 "ENTER" or "RETURN" => 0x0D,
                 "TAB" => 0x09,
                 "ESCAPE" or "ESC" => 0x1B,
+                "PAUSE" or "BREAK" => 0x13,
                 "BACKSPACE" => 0x08,
                 "DELETE" or "DEL" => 0x2E,
                 "INSERT" or "INS" => 0x2D,

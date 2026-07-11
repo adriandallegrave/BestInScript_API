@@ -1,5 +1,6 @@
 using BestInScript.API.Models;
 using BestInScript.API.Persistence;
+using BestInScript.API.Services;
 
 namespace BestInScript.API.Engine
 {
@@ -21,6 +22,7 @@ namespace BestInScript.API.Engine
         private readonly KeyboardHook _hook;
         private readonly ScriptCoordinator _coordinator;
         private readonly ProfileManager _profiles;
+        private readonly OverlaySettingsStore _settings;
         private readonly object _switchLock = new();
 
         public HotkeyEngine(
@@ -29,7 +31,8 @@ namespace BestInScript.API.Engine
             IPresetRepository presetRepo,
             KeyboardHook hook,
             ScriptCoordinator coordinator,
-            ProfileManager profiles)
+            ProfileManager profiles,
+            OverlaySettingsStore settings)
         {
             _logger = logger;
             _repo = repo;
@@ -37,12 +40,18 @@ namespace BestInScript.API.Engine
             _hook = hook;
             _coordinator = coordinator;
             _profiles = profiles;
+            _settings = settings;
         }
 
         // ── IHostedService ─────────────────────────────────────────────────────
         public Task StartAsync(CancellationToken cancellationToken)
         {
             LoadFromRepository();
+
+            // Arm the global emergency-stop hotkey from saved settings, and keep it in sync
+            // when the user changes it via the web UI (OverlaySettingsStore fires Changed).
+            ApplyStopAllKey(_settings.Get());
+            _settings.Changed += ApplyStopAllKey;
 
             _hook.KeyPressed += _coordinator.HandleTriggerKey;
             _hook.Start();
@@ -59,9 +68,23 @@ namespace BestInScript.API.Engine
 
             // Cancel all running scripts (owners stay — this is shutdown, not stop-all),
             // then signal the hook thread's message loop to exit.
+            _settings.Changed -= ApplyStopAllKey;
             _coordinator.CancelAllRunning();
             _hook.Stop();
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Resolve the emergency-stop hotkey from settings and push it to the coordinator.
+        /// An unset/invalid key resolves to VK 0 (disabled).
+        /// </summary>
+        private void ApplyStopAllKey(OverlaySettings settings)
+        {
+            var vk = InputSimulatorService.ResolveVk(settings.StopAllHotkey ?? "");
+            _coordinator.SetStopAllKey(vk);
+            _logger.LogInformation(
+                "Emergency stop-all hotkey {State} (key='{Key}', VK=0x{VK:X2})",
+                vk == 0 ? "disabled" : "armed", settings.StopAllHotkey, vk);
         }
 
         public void Dispose() { /* resources freed in StopAsync / hook thread */ }

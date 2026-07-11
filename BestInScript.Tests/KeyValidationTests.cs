@@ -29,6 +29,7 @@ public class KeyValidationTests
     [InlineData("NUMPAD3")]
     [InlineData("CTRL")]
     [InlineData("SPACE")]
+    [InlineData("PAUSE")]
     public void IsValidTriggerKey_AcceptsKeyboardKeys(string key)
         => Assert.True(InputSimulatorService.IsValidTriggerKey(key));
 

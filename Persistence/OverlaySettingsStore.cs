@@ -126,6 +126,7 @@ namespace BestInScript.API.Persistence
             Opacity = s.Opacity,
             FontSize = s.FontSize,
             HideWhenIdle = s.HideWhenIdle,
+            StopAllHotkey = s.StopAllHotkey,
             EventsEnabled = s.EventsEnabled,
             WorldBoss = CloneEvent(s.WorldBoss),
             Helltide = CloneEvent(s.Helltide),

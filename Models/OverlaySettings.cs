@@ -68,6 +68,15 @@ namespace BestInScript.API.Models
         /// <summary>Hide the overlay entirely when no script is running.</summary>
         public bool HideWhenIdle { get; set; } = false;
 
+        /// <summary>
+        /// Global emergency-stop hotkey (BACKLOG 1.1). When pressed anywhere, the engine
+        /// runs the same StopAll as the web "■ Stop All" button — release held keys, clear
+        /// owners, deactivate presets. Keyboard-only (mouse buttons rejected). Null/empty
+        /// disables it. Takes precedence over any script/preset bound to the same key.
+        /// Global, not profile-scoped, so it always works regardless of the active profile.
+        /// </summary>
+        public string? StopAllHotkey { get; set; } = "Pause";
+
         // ── Diablo 4 event timers ───────────────────────────────────────────
 
         /// <summary>Master switch for the world-boss / helltide / legion rows.</summary>

@@ -41,6 +41,8 @@ public class ResolveVkTests
     [InlineData("DELETE", 0x2E)]
     [InlineData("INS", 0x2D)]
     [InlineData("INSERT", 0x2D)]
+    [InlineData("PAUSE", 0x13)]
+    [InlineData("BREAK", 0x13)]
     public void Aliases_ResolveToSameVk(string alias, int expectedVk)
         => Assert.Equal((ushort)expectedVk, InputSimulatorService.ResolveVk(alias));
 

@@ -15,7 +15,7 @@ namespace BestInScript.API.Services
             var numpad   = Enumerable.Range(0, 10).Select(n => $"NumPad{n}");
             var special  = new[]
             {
-                "Space","Enter","Tab","Escape","Backspace","Delete","Insert",
+                "Space","Enter","Tab","Escape","Pause","Backspace","Delete","Insert",
                 "Home","End","PageUp","PageDown",
                 "Up","Down","Left","Right",
                 "Shift","LShift","RShift",
