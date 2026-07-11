@@ -12,7 +12,7 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.10.0** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.11.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
@@ -139,9 +139,9 @@ The live verdict surfaces to the overlay via `PixelOverlayState` (`NotApplicable
 | `PixelCaptureService`  | Guided in-game pixel capture (BACKLOG 2.1). Armed state machine consulted first in `ScriptCoordinator.HandleTriggerKey`; on the capture hotkey grabs ready then cooldown color at the cursor + a neighborhood grid, and recommends a nearby coordinate when the two colors are too close. Passive (reuses `IScreenSampler` + the passive hook). |
 | `ConfigValidator`      | Script/preset validation shared by both controllers; returns the exact 400 message or null. |
 | `KeyboardHook`         | WH_KEYBOARD_LL hook thread + message pump; raises `KeyPressed(vk)`; never suppresses keys. |
-| `ScriptCoordinator`    | Script/preset registries keyed by VK, ownership model, `_toggleLock`, per-script `CancellationTokenSource`. |
+| `ScriptCoordinator`    | Script/preset registries keyed by VK, ownership model, `_toggleLock`, per-script `CancellationTokenSource`. `HandleTriggerKey` also checks the global emergency-stop hotkey (`_stopAllVk`, set via `SetStopAllKey`) — a match fires `StopAll` and takes precedence over any script/preset on that key (BACKLOG 1.1). |
 | `ScriptExecutor` (`IScriptRunner`) | Blind-loop / pixel-gated run loops + step executor with the mandatory randomized delays. |
-| `HotkeyEngine`         | `IHostedService` façade: loads repos, wires hook → coordinator, delegates the public API. |
+| `HotkeyEngine`         | `IHostedService` façade: loads repos, wires hook → coordinator, delegates the public API. Also resolves `OverlaySettings.StopAllHotkey` → `ScriptCoordinator.SetStopAllKey` at startup and on every `OverlaySettingsStore.Changed`, keeping the panic key live. |
 | `OverlaySettingsStore` | Holds + persists overlay settings (`overlay-settings.json`). Fires `Changed` event on save. Global — NOT profile-scoped. |
 | `OverlayEditModeSignal` | One-way web→overlay signal (`EnterRequested`) that arms drag-to-position edit mode; the commit direction is handled in-window via `OverlayWindow.PositionCommitted`. |
 | `EventScheduleService` (`IHostedService`) | Diablo 4 event timers. One outbound HTTP GET of `helltides.com/api/schedule` at startup (the app's ONLY network call), cached in memory; `GetSnapshot(now)` returns the next world boss / helltide / legion via `EventScheduleCalculator`. Passive/informational; a failed fetch just hides the rows. Injected into `OverlayWindow` (via `OverlayHostedService`) and `OverlayController`. |
@@ -199,7 +199,7 @@ The stores are registered as concrete singletons in `Program.cs` with their inte
 
 Config keys: `BestInScript:DataDirectory`, `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`, `BestInScript:ScheduleApiUrl` (event-timer source, default `https://helltides.com/api/schedule`), `BestInScript:EventsEnabled` (default true). The default `appsettings.json` ships `DataDirectory: C:\temp`.
 
-`overlay-settings.json` also carries the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `AlarmLeadMinutes`, `Color`). These are additive — old files load with defaults (world-boss alarm on at 5 min, helltide/legion alarms off). `OverlaySettingsStore.Clone` deep-copies them.
+`overlay-settings.json` also carries the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `AlarmLeadMinutes`, `Color`) and the global emergency-stop hotkey (`StopAllHotkey`, defaults to `Pause`; null/empty disables it — BACKLOG 1.1). These are additive — old files load with defaults (world-boss alarm on at 5 min, helltide/legion alarms off; `StopAllHotkey` = `Pause`). `OverlaySettingsStore.Clone` deep-copies them.
 
 ## Constraints
 

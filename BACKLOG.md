@@ -9,7 +9,7 @@ The **#** column numbers each item (`section.item`); **Shipped** marks released 
 
 | # | Shipped | Feature | Description | Effort |
 |---|---------|---------|-------------|--------|
-| 1.1 | | **Global stop-all hotkey** | Emergency stop is REST/web-only today. Add a configurable panic key handled in `KeyboardHook` → `StopAll`: keys release, owners clear, presets deactivate. | S |
+| 1.1 | ✅ v1.11.0 | **Global stop-all hotkey** | Emergency stop is REST/web-only today. Add a configurable panic key handled in `KeyboardHook` → `StopAll`: keys release, owners clear, presets deactivate. | S |
 | 1.2 | | **Auto-pause on focus loss** | Watch the foreground window (`GetForegroundWindow` poll or `WinEventHook`). When the game loses focus, suspend key sending but keep owners; resume on refocus. Prevents keystrokes leaking into Discord/browser. | M |
 | 1.3 | | **Idle auto-off timer** | A script auto-stops after N minutes without any user trigger interaction — safety net when the user walks away. Per-script or global setting. | S |
 | 1.4 | | **Held-key panic release** | Explicit "release all held keys now" action exposed in the UI (and optionally a hotkey). Today this only happens implicitly on stop/shutdown. | S |
