@@ -176,7 +176,7 @@ The WPF overlay window (`OverlayWindow`) is a topmost, click-through, taskbar-hi
 
 Only entries with `ShowInOverlay = true` appear. Pixel-triggered scripts show their live pixel state (`READY` / `waiting` / `unreadable`); blind-loop scripts show `ON`.
 
-Below the script/preset rows, the enabled Diablo 4 event timers render as an aligned three-column block (name / region / `H:MM` countdown) using WPF shared-size columns (`Grid.IsSharedSizeScope` on `RowsPanel`). Helltide shows `active` (time until it ends) or `locked` (time until the next start). A per-event alarm flashes the countdown red for the last `AlarmLeadMinutes`; the blink phase is driven off the existing 200 ms poll and folded into the row signature (no Storyboard).
+Below the script/preset rows, the enabled Diablo 4 event timers render as an aligned three-column block (name / region / `H:MM` countdown) using WPF shared-size columns (`Grid.IsSharedSizeScope` on `RowsPanel`). Helltide shows `active` (time until it ends) or `locked` (time until the next start). Each event's alarm is a **text-only, staged** color (no sound, no background): the whole row is the **main color** until `WarningLeadMinutes` out, switches to the **warning color** (solid) inside that window, then **blinks** (alternating warning ↔ main at ~1 Hz) inside the closer `AlarmLeadMinutes`. Helltide keeps its green (active) / red (locked) state color as its *main* base; the warning/blink layer on top. `MakeEventRow` computes the staged brush; the blink is folded into the row `Fg` (which the row signature hashes), so `ApplyRows` rebuilds at the blink cadence off the existing 200 ms poll (no Storyboard).
 
 ### Models
 
@@ -199,7 +199,7 @@ The stores are registered as concrete singletons in `Program.cs` with their inte
 
 Config keys: `BestInScript:DataDirectory`, `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`, `BestInScript:ScheduleApiUrl` (event-timer source, default `https://helltides.com/api/schedule`), `BestInScript:EventsEnabled` (default true). The default `appsettings.json` ships `DataDirectory: C:\temp`.
 
-`overlay-settings.json` also carries the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `AlarmLeadMinutes`, `Color`) and the global emergency-stop hotkey (`StopAllHotkey`, defaults to `Pause`; null/empty disables it — BACKLOG 1.1). These are additive — old files load with defaults (world-boss alarm on at 5 min, helltide/legion alarms off; `StopAllHotkey` = `Pause`). `OverlaySettingsStore.Clone` deep-copies them.
+`overlay-settings.json` also carries the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `WarningLeadMinutes`, `AlarmLeadMinutes`, `Color` [main], `WarningColor` [warning/blink, null = amber]) and the global emergency-stop hotkey (`StopAllHotkey`, defaults to `Pause`; null/empty disables it — BACKLOG 1.1). These are additive — old files load with defaults (world-boss alarm on: warn at 30 min, blink last 5; helltide/legion alarms off; missing `WarningLeadMinutes` = 30, `WarningColor` = amber; `StopAllHotkey` = `Pause`). `OverlaySettingsStore.Clone` deep-copies them.
 
 ## Constraints
 

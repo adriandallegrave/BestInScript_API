@@ -62,12 +62,10 @@ namespace BestInScript.API.Overlay
         private static readonly Brush ErrorDot = Freeze(Color.FromRgb(0xE8, 0x52, 0x52)); // red    – screen unreadable
         private static readonly Brush IdleDot = Freeze(Color.FromRgb(0x77, 0x77, 0x77)); // grey   – idle fallback
 
-        // Alarm blink flashes the countdown cell BACKGROUND between this red and
-        // transparent; the countdown text keeps its configured color.
-        private static readonly Brush AlarmBrush = Freeze(Color.FromRgb(0xFF, 0x4D, 0x4D));
-
-        // Boss "warning" text color: a solid amber heads-up inside the boss lead
-        // window (default 30 min) so the user can prepare, distinct from the red alarm.
+        // Default warning/blink color: a solid amber heads-up inside an event's lead
+        // window. Used when the event's WarningColor is unset. Inside the warning
+        // window the text is this color solid; inside the closer blink window it
+        // alternates with the row's main color.
         private static readonly Brush WarningBrush = Freeze(Color.FromRgb(0xFF, 0xAA, 0x33));
 
         // Helltide state colors (whole row): green while a Helltide is live,
@@ -87,14 +85,9 @@ namespace BestInScript.API.Overlay
         // (name / zone / countdown) with an optional blinking countdown.
         private abstract record OvRow;
         private sealed record SimpleRow(Brush Dot, Brush Label, string Text) : OvRow;
-        // Fg colors all three cells (name / zone / countdown). TimeBackground is
-        // the countdown cell's background — null except on a blink-on frame.
-        private sealed record EventRow(string Name, string Zone, string Time, Brush Fg, Brush? TimeBackground) : OvRow;
-
-        // How an event signals it's inside its lead window:
-        //   BackgroundBlink — flash the countdown background red (helltide / legion).
-        //   WarningText     — switch the row text to the amber warning color (world boss).
-        private enum EventAlarmStyle { BackgroundBlink, WarningText }
+        // Fg colors all three cells (name / zone / countdown). The staged alarm is
+        // text-only: Fg carries the main / warning / blink color; no backgrounds.
+        private sealed record EventRow(string Name, string Zone, string Time, Brush Fg) : OvRow;
 
         private static Brush Freeze(Color c)
         {
@@ -118,6 +111,27 @@ namespace BestInScript.API.Overlay
             int r = rgb[0], g = rgb[1], b = rgb[2];
             if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
                 return Brushes.White;
+
+            var key = $"{r},{g},{b}";
+            if (!_labelBrushes.TryGetValue(key, out var brush))
+            {
+                brush = Freeze(Color.FromRgb((byte)r, (byte)g, (byte)b));
+                _labelBrushes[key] = brush;
+            }
+            return brush;
+        }
+
+        /// <summary>
+        /// Resolve an event's warning/blink brush from an optional [R,G,B].
+        /// Null/malformed falls back to the default amber warning color.
+        /// </summary>
+        private static Brush ResolveWarningBrush(int[]? rgb)
+        {
+            if (rgb is not { Length: 3 }) return WarningBrush;
+
+            int r = rgb[0], g = rgb[1], b = rgb[2];
+            if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
+                return WarningBrush;
 
             var key = $"{r},{g},{b}";
             if (!_labelBrushes.TryGetValue(key, out var brush))
@@ -404,43 +418,49 @@ namespace BestInScript.API.Overlay
             // is live (and stays static otherwise).
             bool blinkOn = (Environment.TickCount64 / 500) % 2 == 0;
 
-            // Boss: default color, but its whole row turns amber inside the lead window.
+            // Boss: main color, staged through warning/blink inside its lead windows.
             if (_settings.WorldBoss.Show && snap.Boss is { } wb)
                 rows.Add(MakeEventRow(
                     _settings.WorldBoss, wb.Name, wb.Zone, wb.StartUnix, nowUnix, blinkOn,
-                    ResolveLabelBrush(_settings.WorldBoss.Color), EventAlarmStyle.WarningText));
+                    ResolveLabelBrush(_settings.WorldBoss.Color)));
 
             if (_settings.Legion.Show && snap.LegionStartUnix is { } legionUnix)
                 rows.Add(MakeEventRow(
                     _settings.Legion, "Legion", "", legionUnix, nowUnix, blinkOn,
-                    ResolveLabelBrush(_settings.Legion.Color), EventAlarmStyle.BackgroundBlink));
+                    ResolveLabelBrush(_settings.Legion.Color)));
 
-            // Helltide: whole row green (active) / red (locked), overriding the accent.
+            // Helltide: whole row green (active) / red (locked) as its main base,
+            // overriding the accent; warning/blink layer on top inside their windows.
             if (_settings.Helltide.Show && snap.Helltide is { } ht)
             {
                 var baseColor = ht.Active ? HelltideActiveBrush : HelltideLockedBrush;
                 rows.Add(MakeEventRow(
                     _settings.Helltide, "Helltide", ht.Active ? "active" : "locked",
-                    ht.TargetUnix, nowUnix, blinkOn, baseColor, EventAlarmStyle.BackgroundBlink));
+                    ht.TargetUnix, nowUnix, blinkOn, baseColor));
             }
         }
 
         private static EventRow MakeEventRow(
             EventOverlayConfig cfg, string name, string zone,
-            long targetUnix, long nowUnix, bool blinkOn,
-            Brush baseColor, EventAlarmStyle style)
+            long targetUnix, long nowUnix, bool blinkOn, Brush baseColor)
         {
             string time = EventScheduleCalculator.FormatRemaining(targetUnix, nowUnix);
-
             long remaining = targetUnix - nowUnix;
-            bool alarm = cfg.AlarmEnabled && remaining >= 0 && remaining <= cfg.AlarmLeadMinutes * 60L;
 
-            // WarningText: recolor the whole row amber (solid). BackgroundBlink: keep
-            // the text color, flash a red countdown background at ~1 Hz.
-            Brush fg = style == EventAlarmStyle.WarningText && alarm ? WarningBrush : baseColor;
-            Brush? timeBg = style == EventAlarmStyle.BackgroundBlink && alarm && blinkOn ? AlarmBrush : null;
+            // Staged, text-only alarm (never a background):
+            //   main → warning (solid) inside WarningLead → blink (warning ↔ main)
+            //   inside the closer AlarmLead.
+            Brush fg = baseColor;
+            if (cfg.AlarmEnabled && remaining >= 0)
+            {
+                var warn = ResolveWarningBrush(cfg.WarningColor);
+                if (remaining <= cfg.AlarmLeadMinutes * 60L)
+                    fg = blinkOn ? warn : baseColor;   // alert: blink warn ↔ main
+                else if (remaining <= cfg.WarningLeadMinutes * 60L)
+                    fg = warn;                          // warning: solid
+            }
 
-            return new EventRow(name, zone, time, fg, timeBg);
+            return new EventRow(name, zone, time, fg);
         }
 
         /// <summary>
@@ -468,7 +488,6 @@ namespace BestInScript.API.Overlay
         {
             SimpleRow sr => "S::" + BrushKey(sr.Dot) + "::" + BrushKey(sr.Label) + "::" + sr.Text,
             EventRow er => "E::" + BrushKey(er.Fg)
-                           + "::" + (er.TimeBackground is { } tb ? BrushKey(tb) : "-")
                            + "::" + er.Name + "::" + er.Zone + "::" + er.Time,
             _ => ""
         };
@@ -511,16 +530,10 @@ namespace BestInScript.API.Overlay
             zone.Margin = new Thickness(0, 0, 14, 0);
             Grid.SetColumn(zone, 1);
 
-            // Countdown lives in a Border so the alarm's red background can blink
-            // behind it with a little padding + rounded corners.
-            var time = new Border
-            {
-                Background = r.TimeBackground ?? Brushes.Transparent,
-                CornerRadius = new CornerRadius(3),
-                Padding = new Thickness(5, 0, 5, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = MakeCell(r.Time, r.Fg)
-            };
+            // Countdown is plain text (no background); the staged alarm lives entirely
+            // in the text color. Small left margin keeps the old column spacing.
+            var time = MakeCell(r.Time, r.Fg);
+            time.Margin = new Thickness(5, 0, 0, 0);
             Grid.SetColumn(time, 2);
 
             grid.Children.Add(name);

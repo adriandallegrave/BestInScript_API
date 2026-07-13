@@ -140,9 +140,13 @@ namespace BestInScript.API.Persistence
             {
                 Show = e.Show,
                 AlarmEnabled = e.AlarmEnabled,
+                WarningLeadMinutes = e.WarningLeadMinutes,
                 AlarmLeadMinutes = e.AlarmLeadMinutes,
                 Color = e.Color is { Length: 3 }
                     ? new[] { e.Color[0], e.Color[1], e.Color[2] }
+                    : null,
+                WarningColor = e.WarningColor is { Length: 3 }
+                    ? new[] { e.WarningColor[0], e.WarningColor[1], e.WarningColor[2] }
                     : null
             };
         }

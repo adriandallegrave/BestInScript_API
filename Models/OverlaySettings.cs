@@ -82,8 +82,8 @@ namespace BestInScript.API.Models
         /// <summary>Master switch for the world-boss / helltide / legion rows.</summary>
         public bool EventsEnabled { get; set; } = true;
 
-        /// <summary>World-boss row config. Warning text defaults ON (30 min before).</summary>
-        public EventOverlayConfig WorldBoss { get; set; } = new() { AlarmEnabled = true, AlarmLeadMinutes = 30 };
+        /// <summary>World-boss row config. Alarm defaults ON (warn at 30 min, blink last 5).</summary>
+        public EventOverlayConfig WorldBoss { get; set; } = new() { AlarmEnabled = true, WarningLeadMinutes = 30, AlarmLeadMinutes = 5 };
 
         /// <summary>Helltide row config. Alarm defaults OFF.</summary>
         public EventOverlayConfig Helltide { get; set; } = new();

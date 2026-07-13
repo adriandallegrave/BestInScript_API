@@ -383,9 +383,12 @@
                     <div class="bis-ov-evt-controls">
                         <label class="bis-ov-check"><input type="checkbox" data-k="show"><span>Show</span></label>
                         <label class="bis-ov-check"><input type="checkbox" data-k="alarm"><span>Alarm</span></label>
-                        <label class="bis-ov-lead">Lead <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
-                        <input type="color" data-k="color" title="Row color">
+                        <label class="bis-ov-lead">Warn <input type="number" data-k="warnlead" min="0" max="120" step="1"> min</label>
+                        <label class="bis-ov-lead">Blink <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
+                        <label class="bis-ov-lead">Main <input type="color" data-k="color" title="Main color"></label>
                         <button type="button" class="bis-ov-color-def" data-k="colordef">Default</button>
+                        <label class="bis-ov-lead">Warning <input type="color" data-k="warncolor" title="Warning / blink color"></label>
+                        <button type="button" class="bis-ov-color-def" data-k="warncolordef">Default</button>
                     </div>
                 </div>
 
@@ -397,9 +400,12 @@
                     <div class="bis-ov-evt-controls">
                         <label class="bis-ov-check"><input type="checkbox" data-k="show"><span>Show</span></label>
                         <label class="bis-ov-check"><input type="checkbox" data-k="alarm"><span>Alarm</span></label>
-                        <label class="bis-ov-lead">Lead <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
-                        <input type="color" data-k="color" title="Row color">
+                        <label class="bis-ov-lead">Warn <input type="number" data-k="warnlead" min="0" max="120" step="1"> min</label>
+                        <label class="bis-ov-lead">Blink <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
+                        <label class="bis-ov-lead">Main <input type="color" data-k="color" title="Main color"></label>
                         <button type="button" class="bis-ov-color-def" data-k="colordef">Default</button>
+                        <label class="bis-ov-lead">Warning <input type="color" data-k="warncolor" title="Warning / blink color"></label>
+                        <button type="button" class="bis-ov-color-def" data-k="warncolordef">Default</button>
                     </div>
                 </div>
 
@@ -411,9 +417,12 @@
                     <div class="bis-ov-evt-controls">
                         <label class="bis-ov-check"><input type="checkbox" data-k="show"><span>Show</span></label>
                         <label class="bis-ov-check"><input type="checkbox" data-k="alarm"><span>Alarm</span></label>
-                        <label class="bis-ov-lead">Lead <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
-                        <input type="color" data-k="color" title="Row color">
+                        <label class="bis-ov-lead">Warn <input type="number" data-k="warnlead" min="0" max="120" step="1"> min</label>
+                        <label class="bis-ov-lead">Blink <input type="number" data-k="lead" min="0" max="120" step="1"> min</label>
+                        <label class="bis-ov-lead">Main <input type="color" data-k="color" title="Main color"></label>
                         <button type="button" class="bis-ov-color-def" data-k="colordef">Default</button>
+                        <label class="bis-ov-lead">Warning <input type="color" data-k="warncolor" title="Warning / blink color"></label>
+                        <button type="button" class="bis-ov-color-def" data-k="warncolordef">Default</button>
                     </div>
                 </div>
             </div>
@@ -476,17 +485,20 @@
         };
         let current = null;
 
-        // Reset an event's row color to "default" (white == no override).
+        // Reset an event's colors to their defaults: main → white (== no override),
+        // warning → amber (#ffaa33, the renderer's null fallback).
         EVENTS.forEach(evt => {
             const def = evtEl(evt, 'colordef');
             if (def) def.addEventListener('click', () => { evtEl(evt, 'color').value = '#ffffff'; });
+            const wdef = evtEl(evt, 'warncolordef');
+            if (wdef) wdef.addEventListener('click', () => { evtEl(evt, 'warncolor').value = '#ffaa33'; });
         });
 
         // Defaults applied when /api/overlay/settings can't be reached. They
         // mirror the OverlaySettings record so the dialog stays usable as a
         // local-only editor and the user can SEE that the API is broken
         // instead of silently getting nothing on click.
-        const EVT_DEFAULT = { show: true, alarmEnabled: false, alarmLeadMinutes: 5, color: null };
+        const EVT_DEFAULT = { show: true, alarmEnabled: false, warningLeadMinutes: 30, alarmLeadMinutes: 5, color: null, warningColor: null };
         const DEFAULT_SETTINGS = Object.freeze({
             enabled: false,
             hideWhenIdle: false,
@@ -496,7 +508,7 @@
             opacity: 0.80,
             fontSize: 12,
             eventsEnabled: true,
-            worldBoss: { ...EVT_DEFAULT, alarmEnabled: true, alarmLeadMinutes: 30 },
+            worldBoss: { ...EVT_DEFAULT, alarmEnabled: true },
             helltide: { ...EVT_DEFAULT },
             legion: { ...EVT_DEFAULT }
         });
@@ -536,8 +548,10 @@
                 const cfg = s[evt] || EVT_DEFAULT;
                 evtEl(evt, 'show').checked = cfg.show !== false;
                 evtEl(evt, 'alarm').checked = !!cfg.alarmEnabled;
+                evtEl(evt, 'warnlead').value = cfg.warningLeadMinutes != null ? cfg.warningLeadMinutes : 30;
                 evtEl(evt, 'lead').value = cfg.alarmLeadMinutes != null ? cfg.alarmLeadMinutes : 5;
                 evtEl(evt, 'color').value = rgbToHex(cfg.color) || '#ffffff';
+                evtEl(evt, 'warncolor').value = rgbToHex(cfg.warningColor) || '#ffaa33';
             });
         }
 
@@ -649,14 +663,18 @@
             }
         }
 
-        // Build one event's config for the save payload (white color == null override).
+        // Build one event's config for the save payload. Main color: white == null
+        // override (white label). Warning color: amber (#ffaa33) == null == default.
         function evtPayload(evt) {
             const hex = evtEl(evt, 'color').value;
+            const whex = evtEl(evt, 'warncolor').value;
             return {
                 show: evtEl(evt, 'show').checked,
                 alarmEnabled: evtEl(evt, 'alarm').checked,
+                warningLeadMinutes: parseInt(evtEl(evt, 'warnlead').value, 10) || 0,
                 alarmLeadMinutes: parseInt(evtEl(evt, 'lead').value, 10) || 0,
-                color: hex && hex.toLowerCase() !== '#ffffff' ? hexToRgb(hex) : null
+                color: hex && hex.toLowerCase() !== '#ffffff' ? hexToRgb(hex) : null,
+                warningColor: whex && whex.toLowerCase() !== '#ffaa33' ? hexToRgb(whex) : null
             };
         }
 
