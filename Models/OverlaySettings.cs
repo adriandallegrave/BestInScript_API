@@ -75,7 +75,7 @@ namespace BestInScript.API.Models
         /// disables it. Takes precedence over any script/preset bound to the same key.
         /// Global, not profile-scoped, so it always works regardless of the active profile.
         /// </summary>
-        public string? StopAllHotkey { get; set; } = "Pause";
+        public string? StopAllHotkey { get; set; } = "1";
 
         // ── Diablo 4 event timers ───────────────────────────────────────────
 

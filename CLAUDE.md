@@ -12,7 +12,7 @@ This app exists solely to prevent repetitive-strain injury (the user plays Diabl
 
 ## Versioning & release workflow
 
-Semantic versioning, tracked in the README's **Version history** table. Current: **1.12.1** (baseline **1.0.0** = commit `eb615c5`).
+Semantic versioning, tracked in the README's **Version history** table. Current: **1.13.0** (baseline **1.0.0** = commit `eb615c5`).
 
 - **Patch** `1.0.+1` — bug fix, no new behavior.
 - **Minor** `1.+1.0` — new feature, backwards compatible.
@@ -199,7 +199,7 @@ The stores are registered as concrete singletons in `Program.cs` with their inte
 
 Config keys: `BestInScript:DataDirectory`, `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`, `BestInScript:ScheduleApiUrl` (event-timer source, default `https://helltides.com/api/schedule`), `BestInScript:EventsEnabled` (default true). The default `appsettings.json` ships `DataDirectory: C:\temp`.
 
-`overlay-settings.json` also carries the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `WarningLeadMinutes`, `AlarmLeadMinutes`, `Color` [main], `WarningColor` [warning/blink, null = amber]) and the global emergency-stop hotkey (`StopAllHotkey`, defaults to `Pause`; null/empty disables it — BACKLOG 1.1). These are additive — old files load with defaults (world-boss alarm on: warn at 30 min, blink last 5; helltide/legion alarms off; missing `WarningLeadMinutes` = 30, `WarningColor` = amber; `StopAllHotkey` = `Pause`). `OverlaySettingsStore.Clone` deep-copies them.
+`overlay-settings.json` also carries the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `WarningLeadMinutes`, `AlarmLeadMinutes`, `Color` [main], `WarningColor` [warning/blink, null = amber]) and the global emergency-stop hotkey (`StopAllHotkey`, defaults to `1`; null/empty disables it — BACKLOG 1.1). These are additive — old files load with defaults (world-boss alarm on: warn at 30 min, blink last 5; helltide/legion alarms off; missing `WarningLeadMinutes` = 30, `WarningColor` = amber; `StopAllHotkey` = `1`). `OverlaySettingsStore.Clone` deep-copies them.
 
 ## Constraints
 
