@@ -90,5 +90,15 @@ namespace BestInScript.API.Models
 
         /// <summary>Legion row config. Alarm defaults OFF.</summary>
         public EventOverlayConfig Legion { get; set; } = new();
+
+        // ── Build-guide panel ───────────────────────────────────────────────
+
+        /// <summary>
+        /// Placement + cycle key for the build-guide panel. The cards themselves are
+        /// profile-scoped (<see cref="BuildCard"/>); only the panel's setup lives here.
+        /// Defaults leave <see cref="BuildPanelConfig.CycleHotkey"/> unset, so the panel
+        /// stays dormant until the user binds a key.
+        /// </summary>
+        public BuildPanelConfig BuildPanel { get; set; } = new();
     }
 }

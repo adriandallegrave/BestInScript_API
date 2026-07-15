@@ -25,6 +25,7 @@ namespace BestInScript.API.Engine
         private readonly ILogger<ScriptCoordinator> _logger;
         private readonly IScriptRunner _runner;
         private readonly PixelCaptureService _capture;
+        private readonly BuildCardSignal _buildCards;
 
         /// <summary>Sentinel owner id meaning "the user pressed this script's own trigger key directly".</summary>
         public static readonly Guid UserOwnerId = Guid.Empty;
@@ -41,11 +42,19 @@ namespace BestInScript.API.Engine
         // Read lock-free in HandleTriggerKey on the hook thread; set from HotkeyEngine.
         private volatile int _stopAllVk;
 
-        public ScriptCoordinator(ILogger<ScriptCoordinator> logger, IScriptRunner runner, PixelCaptureService capture)
+        // VK of the build-panel cycle hotkey; 0 = disabled. Same lock-free pattern as _stopAllVk.
+        private volatile int _buildCardVk;
+
+        public ScriptCoordinator(
+            ILogger<ScriptCoordinator> logger,
+            IScriptRunner runner,
+            PixelCaptureService capture,
+            BuildCardSignal buildCards)
         {
             _logger = logger;
             _runner = runner;
             _capture = capture;
+            _buildCards = buildCards;
         }
 
         public int ScriptCount => _scriptRegistry.Count;
@@ -208,7 +217,8 @@ namespace BestInScript.API.Engine
             }
         }
 
-        /// <summary>Stops all running scripts immediately. Deactivates all presets.</summary>
+        /// <summary>Stops all running scripts immediately. Deactivates all presets.
+        /// Also takes the build panel down — "stop everything" should clear the screen too.</summary>
         public void StopAll()
         {
             lock (_toggleLock)
@@ -222,6 +232,10 @@ namespace BestInScript.API.Engine
                     StopEntry(entry);
                 }
             }
+
+            // Raised outside _toggleLock: the handler hops to the WPF dispatcher, and no
+            // overlay concern belongs inside the engine's ownership lock.
+            _buildCards.RequestHide();
         }
 
         /// <summary>
@@ -230,6 +244,13 @@ namespace BestInScript.API.Engine
         /// settings change. Thread-safe via the volatile field.
         /// </summary>
         public void SetStopAllKey(ushort vk) => _stopAllVk = vk;
+
+        /// <summary>
+        /// Sets (or clears, with 0) the VK that cycles the overlay's build-guide panel.
+        /// Called by <see cref="HotkeyEngine"/> at startup and whenever the overlay settings
+        /// change. Thread-safe via the volatile field.
+        /// </summary>
+        public void SetBuildCardKey(ushort vk) => _buildCardVk = vk;
 
         /// <summary>
         /// Shutdown path: cancel every running task WITHOUT clearing owners or
@@ -283,6 +304,16 @@ namespace BestInScript.API.Engine
             {
                 _logger.LogInformation("Emergency stop-all hotkey pressed (VK=0x{VK:X2})", vkCode);
                 StopAll();
+                return;
+            }
+
+            // Build-panel cycle key: passive UI only (shows a picture, sends no input), but it
+            // claims the key ahead of scripts/presets so a collision can't both flip a card and
+            // start a macro. The stop key above still outranks it.
+            var buildVk = _buildCardVk;
+            if (buildVk != 0 && vkCode == buildVk)
+            {
+                _buildCards.RequestCycle();
                 return;
             }
 

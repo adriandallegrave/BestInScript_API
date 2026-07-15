@@ -33,17 +33,18 @@ Sources are grouped in folders whose names match their namespaces (`BestInScript
 | Pixel reading (GDI, color distance) | `Services/ScreenColorService.cs` + `IScreenSampler.cs` |
 | Guided in-game capture (2-pass hotkey + coordinate nudge) | `Services/PixelCaptureService.cs` (armed via `ScriptCoordinator.HandleTriggerKey`; endpoints on `ScreenController`) |
 | Diablo 4 event timers (world boss / helltide / legion) | `Services/EventScheduleService.cs` (one startup HTTP fetch of `helltides.com/api/schedule`, cached), `Engine/EventScheduleCalculator.cs` (pure next-event selection + `H:MM` formatting), models `Models/EventSchedule.cs` / `EventSnapshot.cs` / `EventOverlayConfig.cs`. Rendered by `OverlayWindow`, configured in the overlay panel |
+| Build guide cards (overlay reference panel) | `Overlay/BuildCardWindow.xaml(.cs)` (the panel), `Models/BuildCard.cs` / `BuildPanelConfig.cs`, `Persistence/BuildCardRepository.cs` (+ `IBuildCardRepository.cs`), `Controllers/BuildCardsController.cs` (CRUD + image upload/serve), `Services/BuildCardSignal.cs` (engine→overlay), pure cycle logic `Engine/BuildCardCycleCalculator.cs`. Configured in the web UI's **📋 Build guide** modal |
 | Validation (shared by both controllers) | `Services/ConfigValidator.cs` |
-| Controllers | `Controllers/` — `ScriptsController.cs`, `PresetsController.cs`, `EngineController.cs`, `OverlayController.cs`, `ScreenController.cs`, `ProfilesController.cs` |
-| Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs`, `EventSchedule.cs`, `EventSnapshot.cs`, `EventOverlayConfig.cs` |
-| Persistence | `Persistence/` — `JsonListFileStore.cs` (generic base), `ScriptRepository.cs`, `PresetRepository.cs`, `OverlaySettingsStore.cs`, `DataFilePathResolver.cs`, `ProfileManager.cs` (+ `IProfileScopedStore.cs`), `IScriptRepository.cs`, `IPresetRepository.cs` |
-| Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)`, `OverlayHostedService.cs`; drag-to-position: `Services/OverlayEditModeSignal.cs` (web→overlay arm) + pure geometry `Engine/OverlayPositionCalculator.cs` |
+| Controllers | `Controllers/` — `ScriptsController.cs`, `PresetsController.cs`, `EngineController.cs`, `OverlayController.cs`, `ScreenController.cs`, `ProfilesController.cs`, `BuildCardsController.cs` |
+| Models | `Models/` — `ScriptConfig.cs`, `ScriptStep.cs`, `PixelTrigger.cs`, `Preset.cs`, `OverlaySettings.cs`, `ScriptStatus.cs`, `PresetStatus.cs`, `PixelOverlayState.cs`, `EventSchedule.cs`, `EventSnapshot.cs`, `EventOverlayConfig.cs`, `BuildCard.cs`, `BuildPanelConfig.cs` |
+| Persistence | `Persistence/` — `JsonListFileStore.cs` (generic base), `ScriptRepository.cs`, `PresetRepository.cs`, `BuildCardRepository.cs`, `OverlaySettingsStore.cs`, `DataFilePathResolver.cs`, `ProfileManager.cs` (+ `IProfileScopedStore.cs`), `IScriptRepository.cs`, `IPresetRepository.cs`, `IBuildCardRepository.cs` |
+| Overlay (WPF) | `Overlay/` — `OverlayWindow.xaml(.cs)` (status pill), `BuildCardWindow.xaml(.cs)` (build panel), `OverlayHostedService.cs` (hosts BOTH windows on one STA thread); drag-to-position: `Services/OverlayEditModeSignal.cs` (web→pill arm) + `Services/BuildCardSignal.cs` (web/engine→panel) + pure geometry `Engine/OverlayPositionCalculator.cs` |
 | Tray icon | `Tray/TrayIconHostedService.cs` — NotifyIcon on dedicated STA thread (open UI / stop-all / exit); also hosts the single-instance activation listener |
 | Single-instance guard | `Services/SingleInstanceGuard.cs` — `Local\` named mutex gate + auto-reset activation event; gated at the top of `Program.cs`, listener attached by the tray service |
 | Tests | `BestInScript.Tests/` — xUnit, one file per subject; hand-rolled fakes in `Fakes/` |
-| Web UI | `wwwroot/index.html` (+ `overlay-settings-panel.html`, manually pasted in); app icon `wwwroot/app.ico` (tray + favicon + exe), located at runtime by `Services/WebAssetLocator.cs` |
+| Web UI | `wwwroot/index.html` is the ONLY file served. Two self-contained modal blocks are **manually pasted** into it before `</body>`, each kept as a standalone copy that must be edited in **both** places: `wwwroot/_overlay-panel.html` (marker `BIS_OVERLAY_PANEL_MARKER`) and `wwwroot/_build-panel.html` (marker `BIS_BUILD_PANEL_MARKER`). The root-level `overlay-settings-panel.html` is **stale legacy — ignore it**. App icon `wwwroot/app.ico` (tray + favicon + exe), located at runtime by `Services/WebAssetLocator.cs` |
 | Config | `appsettings.json` (`BestInScript:DataDirectory` → `C:\temp`) |
-| Data (runtime) | `C:\temp\profiles\<name>\scripts.json` + `presets.json` (per profile), `C:\temp\profiles.json` (active pointer), `C:\temp\overlay-settings.json` (global) |
+| Data (runtime) | `C:\temp\profiles\<name>\scripts.json` + `presets.json` + `build-cards.json` + `cards/*.png` (per profile), `C:\temp\profiles.json` (active pointer), `C:\temp\overlay-settings.json` (global) |
 
 ## Commands
 
@@ -139,9 +140,11 @@ The live verdict surfaces to the overlay via `PixelOverlayState` (`NotApplicable
 | `PixelCaptureService`  | Guided in-game pixel capture (BACKLOG 2.1). Armed state machine consulted first in `ScriptCoordinator.HandleTriggerKey`; on the capture hotkey grabs ready then cooldown color at the cursor + a neighborhood grid, and recommends a nearby coordinate when the two colors are too close. Passive (reuses `IScreenSampler` + the passive hook). |
 | `ConfigValidator`      | Script/preset validation shared by both controllers; returns the exact 400 message or null. |
 | `KeyboardHook`         | WH_KEYBOARD_LL hook thread + message pump; raises `KeyPressed(vk)`; never suppresses keys. |
-| `ScriptCoordinator`    | Script/preset registries keyed by VK, ownership model, `_toggleLock`, per-script `CancellationTokenSource`. `HandleTriggerKey` also checks the global emergency-stop hotkey (`_stopAllVk`, set via `SetStopAllKey`) — a match fires `StopAll` and takes precedence over any script/preset on that key (BACKLOG 1.1). |
+| `ScriptCoordinator`    | Script/preset registries keyed by VK, ownership model, `_toggleLock`, per-script `CancellationTokenSource`. `HandleTriggerKey` precedence: capture service → emergency-stop hotkey (`_stopAllVk`, via `SetStopAllKey`, BACKLOG 1.1) → build-panel cycle key (`_buildCardVk`, via `SetBuildCardKey`, raises `BuildCardSignal`) → scripts → presets. Both hotkeys win over any script/preset on the same key; stop-all outranks the cycle key. `StopAll` also raises `BuildCardSignal.RequestHide` (outside `_toggleLock`) so the panic key clears the build panel. |
 | `ScriptExecutor` (`IScriptRunner`) | Blind-loop / pixel-gated run loops + step executor with the mandatory randomized delays. |
-| `HotkeyEngine`         | `IHostedService` façade: loads repos, wires hook → coordinator, delegates the public API. Also resolves `OverlaySettings.StopAllHotkey` → `ScriptCoordinator.SetStopAllKey` at startup and on every `OverlaySettingsStore.Changed`, keeping the panic key live. |
+| `HotkeyEngine`         | `IHostedService` façade: loads repos, wires hook → coordinator, delegates the public API. `ApplyGlobalHotkeys` resolves `OverlaySettings.StopAllHotkey` → `SetStopAllKey` and `BuildPanel.CycleHotkey` → `SetBuildCardKey` at startup and on every `OverlaySettingsStore.Changed`, keeping both live. |
+| `BuildCardSignal`     | One-way engine/web → build-panel signals (`CycleRequested`, `HideRequested`, `CardsChanged`, `EnterEditRequested`), marshalled onto the WPF dispatcher by `OverlayHostedService`. Keeps `ScriptCoordinator` free of WPF and testable. Distinct from `OverlayEditModeSignal`, which arms the status pill. |
+| `BuildCardRepository` (`IBuildCardRepository`) | `build-cards.json` + the `cards/` image directory beside it. `IProfileScopedStore` with `ProfileSubdirectory = "cards"`. `GetAll` imposes cycle order (Order, then Name); `Delete` removes the image with the row. Images are side files, not base64 — `JsonListFileStore` re-reads the file on every op, so blobs in the JSON would make every read parse megabytes. |
 | `OverlaySettingsStore` | Holds + persists overlay settings (`overlay-settings.json`). Fires `Changed` event on save. Global — NOT profile-scoped. |
 | `OverlayEditModeSignal` | One-way web→overlay signal (`EnterRequested`) that arms drag-to-position edit mode; the commit direction is handled in-window via `OverlayWindow.PositionCommitted`. |
 | `EventScheduleService` (`IHostedService`) | Diablo 4 event timers. One outbound HTTP GET of `helltides.com/api/schedule` at startup (the app's ONLY network call), cached in memory; `GetSnapshot(now)` returns the next world boss / helltide / legion via `EventScheduleCalculator`. Passive/informational; a failed fetch just hides the rows. Injected into `OverlayWindow` (via `OverlayHostedService`) and `OverlayController`. |
@@ -166,6 +169,8 @@ All controllers are under `/api/[controller]`. Swagger UI at `/swagger`.
 | `/api/overlay/events`                                | Live "next event" snapshot (world boss / helltide / legion) with `H:MM` countdowns — read-only preview for the config UI. |
 | `/api/screen/color`, `/api/screen/cursor`            | Pixel + cursor-position sampling used by the config UI. |
 | `/api/screen/capture/arm`, `/disarm`, `/state`       | Guided in-game capture: arm a hotkey, then two in-game presses grab ready/cooldown color + a coordinate-nudge suggestion; UI polls `/state`. |
+| `/api/overlay/build-panel/edit-mode` (POST)          | Arm drag-to-position on the build panel (the pill has its own `/edit-mode`). |
+| `/api/buildcards` (CRUD), `POST /{id}/image`, `GET /{id}/image` | Build guide cards. `POST /api/buildcards` is a **multipart** upload (`IFormFile` + name) — the only such endpoint. Images resolve by `Guid` through the repo, so no client-supplied path reaches the filesystem. |
 | `/api/profiles` (list, create, `/{name}/activate`, rename, delete) | Named config profiles. `activate` routes through `HotkeyEngine.SwitchProfile` (stops runs, repoints stores, reloads). |
 
 ### Overlay
@@ -176,6 +181,17 @@ The WPF overlay window (`OverlayWindow`) is a topmost, click-through, taskbar-hi
 
 Only entries with `ShowInOverlay = true` appear. Pixel-triggered scripts show their live pixel state (`READY` / `waiting` / `unreadable`); blind-loop scripts show `ON`.
 
+**Build guide panel (BACKLOG 4.4):** `BuildCardWindow` is a *second* WPF window on the same STA thread/`Application`, with the same ex-styles as the pill but its own placement, size and drag-to-position. It shows one `BuildCard` — a user-pasted crop of a build guide — so the user stops alt-tabbing mid-session. Purely passive: a picture pinned over the screen, no game reads, no synthetic input, no network call.
+
+Key differences from the pill, all deliberate:
+- **No `DispatcherTimer`.** Content changes only on a cycle press or a web-UI edit, so a big bitmap is composited once rather than re-evaluated 5×/second. It does not reuse the `OvRow`/`ApplyRows`/`RowSignature` machinery at all.
+- The cycle key walks `hidden → first → next → … → hidden` via the pure `BuildCardCycleCalculator`; `StopAll` force-hides.
+- Bitmaps are decoded via a `MemoryStream` + `CacheOption.OnLoad` (no file lock, so the web UI can replace an image under it) with `DecodePixelWidth` set from `MaxWidth × Scale` **only when the source is wider** — downscale, never upscale — then frozen and cached per card id. The cache is cleared on `CardsChanged`.
+- `MaxWidth`/`MaxHeight` on the `Image` are load-bearing: nothing else bounds the window, which sizes itself to its content.
+- The HWND is created in the ctor via `EnsureHandle()` so `OnSourceInitialized` applies click-through *before* the first show; otherwise the first cycle press would flash a focusable window.
+
+Anchor math is shared with the pill in `OverlayPositionCalculator.AnchoredTopLeft`.
+
 Below the script/preset rows, the enabled Diablo 4 event timers render as an aligned three-column block (name / region / `H:MM` countdown) using WPF shared-size columns (`Grid.IsSharedSizeScope` on `RowsPanel`). Helltide shows `active` (time until it ends) or `locked` (time until the next start). Each event's alarm is a **text-only, staged** color (no sound, no background): the whole row is the **main color** until `WarningLeadMinutes` out, switches to the **warning color** (solid) inside that window, then **blinks** (alternating warning ↔ main at ~1 Hz) inside the closer `AlarmLeadMinutes`. Helltide keeps its green (active) / red (locked) state color as its *main* base; the warning/blink layer on top. `MakeEventRow` computes the staged brush; the blink is folded into the row `Fg` (which the row signature hashes), so `ApplyRows` rebuilds at the blink cadence off the existing 200 ms poll (no Storyboard).
 
 ### Models
@@ -184,6 +200,8 @@ Below the script/preset rows, the enabled Diablo 4 event timers render as an ali
 - `ScriptStep` — a single step: `Hold[]` (keys kept down) + `Press[]` (keys tapped once).
 - `PixelTrigger` — screen-color gate: pixel coordinate, ready/cooldown RGB, tolerance, poll interval, re-arm delay, sample radius, and `RequireReset` (one-shot vs continuous autocast).
 - `Preset` — name, trigger key, member `ScriptIds`, `ShowInOverlay`.
+- `BuildCard` — one page of build-guide reference art: name, `Order` (cycle position), `ImageFileName` (server-generated, never client-supplied), optional `Notes`, `Scale`. Profile-scoped.
+- `BuildPanelConfig` — the build panel's placement + `CycleHotkey`. Global (lives in `OverlaySettings`), unlike the cards.
 
 ### Web UI
 
@@ -191,15 +209,21 @@ Static `wwwroot/index.html` served directly (no static-file middleware — a man
 
 ### Data files
 
-Per-profile: `profiles/<name>/scripts.json` + `profiles/<name>/presets.json`. Global: `overlay-settings.json` (at the base dir) and `profiles.json` (the active-profile pointer).
+Per-profile: `profiles/<name>/scripts.json`, `presets.json`, `build-cards.json`, and the `cards/` image directory. Global: `overlay-settings.json` (at the base dir) and `profiles.json` (the active-profile pointer).
 
-`ProfileManager` computes the base dir from `DataFilePathResolver.ResolveBaseDirectory` (`BestInScript:DataDirectory` or `AppContext.BaseDirectory`) and, at startup + on every switch, calls `Rebind` on each `IProfileScopedStore` (the two repos) to point it at `<base>/profiles/<active>/<file>`. The two repos implement `IProfileScopedStore`; `OverlaySettingsStore` does not (it stays at the base dir, still via `DataFilePathResolver.Resolve`). **Migration:** on first run after upgrade, loose `scripts.json`/`presets.json` in the base dir are moved into a `Default` profile.
+`ProfileManager` computes the base dir from `DataFilePathResolver.ResolveBaseDirectory` (`BestInScript:DataDirectory` or `AppContext.BaseDirectory`) and, at startup + on every switch, calls `Rebind` on each `IProfileScopedStore` (the three repos) to point it at `<base>/profiles/<active>/<file>`. The three repos implement `IProfileScopedStore`; `OverlaySettingsStore` does not (it stays at the base dir, still via `DataFilePathResolver.Resolve`). **Migration:** on first run after upgrade, loose `scripts.json`/`presets.json` in the base dir are moved into a `Default` profile.
+
+`IProfileScopedStore.ProfileSubdirectory` (default null) names a directory of blob files the store owns inside the profile — only `BuildCardRepository` uses it (`"cards"`). `ProfileManager` creates it on rebind and **copies it recursively on `Create(copyFromCurrent: true)`**; without that, the season-rollover copy flow would produce a profile whose JSON references images that aren't there. `Delete` (recursive) and `Rename` (directory move) already handled subdirectories.
 
 The stores are registered as concrete singletons in `Program.cs` with their interfaces forwarded to the same instance, so `ProfileManager` repoints the exact stores that controllers, the validator, and the engine all use. `DataFilePathResolver.Resolve`'s absolute per-file overrides (`BestInScript:DataFilePath` etc.) still set each store's *initial* path but are superseded once `ProfileManager` rebinds to the active profile.
 
 Config keys: `BestInScript:DataDirectory`, `BestInScript:DataFilePath`, `BestInScript:PresetsFilePath`, `BestInScript:OverlaySettingsPath`, `BestInScript:ScheduleApiUrl` (event-timer source, default `https://helltides.com/api/schedule`), `BestInScript:EventsEnabled` (default true). The default `appsettings.json` ships `DataDirectory: C:\temp`.
 
-`overlay-settings.json` also carries the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `WarningLeadMinutes`, `AlarmLeadMinutes`, `Color` [main], `WarningColor` [warning/blink, null = amber]) and the global emergency-stop hotkey (`StopAllHotkey`, defaults to `1`; null/empty disables it — BACKLOG 1.1). These are additive — old files load with defaults (world-boss alarm on: warn at 30 min, blink last 5; helltide/legion alarms off; missing `WarningLeadMinutes` = 30, `WarningColor` = amber; `StopAllHotkey` = `1`). `OverlaySettingsStore.Clone` deep-copies them.
+`overlay-settings.json` also carries the build panel's config (`BuildPanel`: `Enabled`, `CycleHotkey` [null = dormant], placement/`MaxWidth`/`MaxHeight`/`Opacity`/`FontSize`) and the event-timer config (`EventsEnabled` master switch + per-event `WorldBoss` / `Helltide` / `Legion` blocks: `Show`, `AlarmEnabled`, `WarningLeadMinutes`, `AlarmLeadMinutes`, `Color` [main], `WarningColor` [warning/blink, null = amber]) and the global emergency-stop hotkey (`StopAllHotkey`, defaults to `1`; null/empty disables it — BACKLOG 1.1). These are additive — old files load with defaults (world-boss alarm on: warn at 30 min, blink last 5; helltide/legion alarms off; missing `WarningLeadMinutes` = 30, `WarningColor` = amber; `StopAllHotkey` = `1`; `BuildPanel` present but dormant).
+
+**Two traps when adding an `OverlaySettings` field — both fail silently, neither is a compile error:**
+1. `OverlaySettingsStore.Clone` is a **manual, field-by-field** deep copy. `Get()` returns `Clone(_current)` and `Save` publishes a `Clone` to `Changed`, so a field missing from `Clone` persists to disk correctly and **still never reaches the overlay window**. `OverlaySettingsStoreTests` guards this.
+2. `PUT /api/overlay/settings` is a **full replace, no merge**. Every web-UI save payload must spread the last-loaded settings (`...current`) so fields that dialog doesn't edit survive. Both modal blocks do this; before v1.14.0 the overlay dialog did not, and saving it silently reset the panic key to its default.
 
 ## Constraints
 

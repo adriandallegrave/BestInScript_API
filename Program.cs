@@ -38,6 +38,9 @@ builder.Services.AddSingleton<IProfileScopedStore>(sp => sp.GetRequiredService<S
 builder.Services.AddSingleton<PresetRepository>();
 builder.Services.AddSingleton<IPresetRepository>(sp => sp.GetRequiredService<PresetRepository>());
 builder.Services.AddSingleton<IProfileScopedStore>(sp => sp.GetRequiredService<PresetRepository>());
+builder.Services.AddSingleton<BuildCardRepository>();
+builder.Services.AddSingleton<IBuildCardRepository>(sp => sp.GetRequiredService<BuildCardRepository>());
+builder.Services.AddSingleton<IProfileScopedStore>(sp => sp.GetRequiredService<BuildCardRepository>());
 builder.Services.AddSingleton<ProfileManager>();
 builder.Services.AddSingleton<IInputSimulator, InputSimulatorService>();
 builder.Services.AddSingleton<IScreenSampler, ScreenColorService>();
@@ -57,6 +60,8 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<HotkeyEngine>());
 // Both are required — without the hosted service no overlay is created on screen.
 builder.Services.AddSingleton<OverlaySettingsStore>();
 builder.Services.AddSingleton<OverlayEditModeSignal>();
+// Engine → build-panel signal. Registered before the coordinator resolves it.
+builder.Services.AddSingleton<BuildCardSignal>();
 builder.Services.AddHostedService<OverlayHostedService>();
 
 // ── Diablo 4 event timers (world boss / helltide / legion) ──────────────────

@@ -19,15 +19,18 @@ namespace BestInScript.API.Controllers
         private readonly OverlaySettingsStore _store;
         private readonly EventScheduleService _events;
         private readonly OverlayEditModeSignal _editSignal;
+        private readonly BuildCardSignal _buildSignal;
 
         public OverlayController(
             OverlaySettingsStore store,
             EventScheduleService events,
-            OverlayEditModeSignal editSignal)
+            OverlayEditModeSignal editSignal,
+            BuildCardSignal buildSignal)
         {
             _store = store;
             _events = events;
             _editSignal = editSignal;
+            _buildSignal = buildSignal;
         }
 
         // GET /api/overlay/settings
@@ -49,6 +52,13 @@ namespace BestInScript.API.Controllers
                 return BadRequest(
                     $"'{settings.StopAllHotkey}' is not a valid stop-all hotkey (keyboard keys only).");
 
+            // Build-panel cycle hotkey: same rule as above. Empty/null disables the panel key.
+            var cycleKey = settings.BuildPanel?.CycleHotkey;
+            if (!string.IsNullOrWhiteSpace(cycleKey)
+                && !InputSimulatorService.IsValidTriggerKey(cycleKey))
+                return BadRequest(
+                    $"'{cycleKey}' is not a valid build panel hotkey (keyboard keys only).");
+
             _store.Save(settings);
             return Ok(_store.Get());
         }
@@ -63,6 +73,19 @@ namespace BestInScript.API.Controllers
         public IActionResult EnterEditMode()
         {
             _editSignal.RequestEnter();
+            return Ok();
+        }
+
+        // POST /api/overlay/build-panel/edit-mode
+        /// <summary>
+        /// Arm drag-to-position edit mode on the build-guide panel (the pill has its own
+        /// endpoint above). Shows the first card so there is something to drag, then
+        /// hides again on ✓/✕. No-op when the overlay isn't running.
+        /// </summary>
+        [HttpPost("build-panel/edit-mode")]
+        public IActionResult EnterBuildPanelEditMode()
+        {
+            _buildSignal.RequestEnterEdit();
             return Ok();
         }
 

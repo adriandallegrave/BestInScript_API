@@ -1,10 +1,14 @@
+using BestInScript.API.Models;
+
 namespace BestInScript.API.Engine
 {
     /// <summary>
-    /// Pure geometry for the overlay's custom (dragged) position: pick the screen
-    /// under a point, convert between a screen-relative offset and an absolute
-    /// top-left, and clamp so the pill can never sit fully off-screen. Kept
+    /// Pure geometry for placing an overlay window: resolve a 9-point anchor, pick the
+    /// screen under a point, convert between a screen-relative offset and an absolute
+    /// top-left, and clamp so a window can never sit fully off-screen. Kept
     /// Win32/DPI-free so it is unit-testable (mirrors <see cref="EventScheduleCalculator"/>).
+    ///
+    /// Shared by the status pill and the build-guide panel — both anchor the same way.
     ///
     /// All coordinates are device-independent pixels (DIP); the caller converts
     /// physical monitor bounds to DIP before handing rects in.
@@ -29,6 +33,38 @@ namespace BestInScript.API.Engine
                     return i;
             }
             return fallback;
+        }
+
+        /// <summary>
+        /// Absolute top-left for a <paramref name="winW"/>×<paramref name="winH"/> window
+        /// docked to one of the 8 edge/corner anchors (or centered) on
+        /// <paramref name="screen"/>, inset by <paramref name="margin"/>.
+        ///
+        /// <see cref="OverlayAnchor.Custom"/> has no anchored position of its own — callers
+        /// handle it via <see cref="ToAbsoluteClamped"/> — and falls through to centered here.
+        /// </summary>
+        public static (double X, double Y) AnchoredTopLeft(
+            ScreenRect screen, OverlayAnchor anchor, double margin, double winW, double winH)
+        {
+            double x = anchor switch
+            {
+                OverlayAnchor.TopLeft or OverlayAnchor.MiddleLeft or OverlayAnchor.BottomLeft
+                    => screen.Left + margin,
+                OverlayAnchor.TopRight or OverlayAnchor.MiddleRight or OverlayAnchor.BottomRight
+                    => screen.Left + screen.Width - winW - margin,
+                _ => screen.Left + (screen.Width - winW) / 2
+            };
+
+            double y = anchor switch
+            {
+                OverlayAnchor.TopLeft or OverlayAnchor.TopCenter or OverlayAnchor.TopRight
+                    => screen.Top + margin,
+                OverlayAnchor.BottomLeft or OverlayAnchor.BottomCenter or OverlayAnchor.BottomRight
+                    => screen.Top + screen.Height - winH - margin,
+                _ => screen.Top + (screen.Height - winH) / 2
+            };
+
+            return (x, y);
         }
 
         /// <summary>Offset of an absolute top-left from a screen's top-left.</summary>

@@ -53,7 +53,8 @@ namespace BestInScript.API.Persistence
         /// <summary>Identity selector used for upsert and delete.</summary>
         protected abstract Guid GetId(T item);
 
-        public List<T> GetAll()
+        /// <summary>Virtual so stores with an inherent ordering can impose it in one place.</summary>
+        public virtual List<T> GetAll()
         {
             lock (_lock)
             {
@@ -93,7 +94,9 @@ namespace BestInScript.API.Persistence
             }
         }
 
-        public bool Delete(Guid id)
+        /// <summary>Virtual so stores owning side files (see <see cref="IProfileScopedStore.ProfileSubdirectory"/>)
+        /// can clean those up alongside the JSON row.</summary>
+        public virtual bool Delete(Guid id)
         {
             lock (_lock)
             {

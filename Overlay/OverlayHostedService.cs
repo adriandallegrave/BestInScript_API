@@ -22,23 +22,30 @@ namespace BestInScript.API.Overlay
         private readonly OverlaySettingsStore _store;
         private readonly EventScheduleService _events;
         private readonly OverlayEditModeSignal _editSignal;
+        private readonly BuildCardSignal _buildSignal;
+        private readonly IBuildCardRepository _cards;
         private readonly ILogger<OverlayHostedService> _logger;
 
         private Thread? _uiThread;
         private Dispatcher? _dispatcher;
         private OverlayWindow? _window;
+        private BuildCardWindow? _buildWindow;
 
         public OverlayHostedService(
             HotkeyEngine engine,
             OverlaySettingsStore store,
             EventScheduleService events,
             OverlayEditModeSignal editSignal,
+            BuildCardSignal buildSignal,
+            IBuildCardRepository cards,
             ILogger<OverlayHostedService> logger)
         {
             _engine = engine;
             _store = store;
             _events = events;
             _editSignal = editSignal;
+            _buildSignal = buildSignal;
+            _cards = cards;
             _logger = logger;
         }
 
@@ -64,6 +71,11 @@ namespace BestInScript.API.Overlay
                     };
 
                     _window = new OverlayWindow(_engine, _events, _store.Get());
+
+                    // Second window on the same STA thread/dispatcher: the build-guide
+                    // panel. Starts hidden; the cycle hotkey brings it up.
+                    _buildWindow = new BuildCardWindow(_cards, _store.Get());
+
                     _dispatcher = app.Dispatcher;
 
                     // Push live settings changes onto the UI thread.
@@ -73,6 +85,13 @@ namespace BestInScript.API.Overlay
                     // committed position back for us to persist.
                     _editSignal.EnterRequested += OnEnterEditRequested;
                     _window.PositionCommitted += OnPositionCommitted;
+
+                    // Build panel: engine raises these from the hook thread.
+                    _buildSignal.CycleRequested += OnBuildCycleRequested;
+                    _buildSignal.HideRequested += OnBuildHideRequested;
+                    _buildSignal.CardsChanged += OnBuildCardsChanged;
+                    _buildSignal.EnterEditRequested += OnBuildEnterEditRequested;
+                    _buildWindow.PositionCommitted += OnBuildPositionCommitted;
 
                     ready.Set();
                     app.Run(_window);
@@ -104,7 +123,12 @@ namespace BestInScript.API.Overlay
             {
                 _store.Changed -= OnSettingsChanged;
                 _editSignal.EnterRequested -= OnEnterEditRequested;
+                _buildSignal.CycleRequested -= OnBuildCycleRequested;
+                _buildSignal.HideRequested -= OnBuildHideRequested;
+                _buildSignal.CardsChanged -= OnBuildCardsChanged;
+                _buildSignal.EnterEditRequested -= OnBuildEnterEditRequested;
                 if (_window != null) _window.PositionCommitted -= OnPositionCommitted;
+                if (_buildWindow != null) _buildWindow.PositionCommitted -= OnBuildPositionCommitted;
                 _dispatcher?.InvokeAsync(() =>
                 {
                     try { Application.Current?.Shutdown(); } catch { /* already gone */ }
@@ -121,10 +145,47 @@ namespace BestInScript.API.Overlay
         private void OnSettingsChanged(OverlaySettings s)
         {
             var dispatcher = _dispatcher;
+            if (dispatcher == null) return;
+
             var window = _window;
+            var buildWindow = _buildWindow;
+
+            dispatcher.InvokeAsync(() =>
+            {
+                window?.ApplySettings(s);
+                buildWindow?.ApplySettings(s);
+            });
+        }
+
+        // ── Build panel: hook thread → WPF dispatcher ──────────────────────
+
+        private void OnBuildCycleRequested() => OnBuildPanel(w => w.Cycle());
+
+        private void OnBuildHideRequested() => OnBuildPanel(w => w.HidePanel());
+
+        private void OnBuildCardsChanged() => OnBuildPanel(w => w.ReloadFromRepository());
+
+        private void OnBuildEnterEditRequested() => OnBuildPanel(w => w.EnterEditMode());
+
+        private void OnBuildPanel(Action<BuildCardWindow> action)
+        {
+            var dispatcher = _dispatcher;
+            var window = _buildWindow;
             if (dispatcher == null || window == null) return;
 
-            dispatcher.InvokeAsync(() => window.ApplySettings(s));
+            dispatcher.InvokeAsync(() => action(window));
+        }
+
+        // Build panel committed a dragged position (already on the UI thread). Persist it
+        // to the panel's own block; the resulting Changed event re-applies it live.
+        private void OnBuildPositionCommitted(int screenIndex, double x, double y)
+        {
+            var s = _store.Get();
+            s.BuildPanel.ScreenIndex = screenIndex;
+            s.BuildPanel.Anchor = OverlayAnchor.Custom;
+            s.BuildPanel.PositionX = x;
+            s.BuildPanel.PositionY = y;
+            _store.Save(s);
         }
 
         // Web asked to reposition — marshal the toggle onto the UI thread.

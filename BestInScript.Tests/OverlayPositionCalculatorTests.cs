@@ -1,11 +1,13 @@
 using BestInScript.API.Engine;
+using BestInScript.API.Models;
 using Rect = BestInScript.API.Engine.OverlayPositionCalculator.ScreenRect;
 
 namespace BestInScript.Tests;
 
 /// <summary>
-/// Pins the pure geometry behind drag-to-position: screen-under-a-point selection,
-/// relative↔absolute offset round-trips, and the off-screen clamp.
+/// Pins the pure geometry shared by the status pill and the build-guide panel:
+/// 9-point anchoring, screen-under-a-point selection, relative↔absolute offset
+/// round-trips, and the off-screen clamp.
 /// </summary>
 public class OverlayPositionCalculatorTests
 {
@@ -15,6 +17,58 @@ public class OverlayPositionCalculatorTests
         new Rect(0, 0, 1920, 1080),
         new Rect(1920, 0, 1920, 1080)
     };
+
+    // ── AnchoredTopLeft ─────────────────────────────────────────────────────
+
+    // A 200×100 window with a 10px margin on the second screen, so the tests also
+    // prove the anchor is applied relative to that screen's origin, not the desktop's.
+    private static (double X, double Y) Anchored(OverlayAnchor anchor)
+        => OverlayPositionCalculator.AnchoredTopLeft(
+            TwoScreens[1], anchor, margin: 10, winW: 200, winH: 100);
+
+    [Fact]
+    public void AnchoredTopLeft_Corners_InsetByMarginFromTheScreenOrigin()
+    {
+        Assert.Equal((1930d, 10d), Anchored(OverlayAnchor.TopLeft));
+        Assert.Equal((1920 + 1920 - 200 - 10, 10d), Anchored(OverlayAnchor.TopRight));
+        Assert.Equal((1930d, 1080 - 100 - 10d), Anchored(OverlayAnchor.BottomLeft));
+        Assert.Equal((1920 + 1920 - 200 - 10, 1080 - 100 - 10d), Anchored(OverlayAnchor.BottomRight));
+    }
+
+    [Fact]
+    public void AnchoredTopLeft_Edges_CenterOnTheFreeAxis()
+    {
+        // Top/bottom center: x centered, y pinned by the margin.
+        Assert.Equal((1920 + (1920 - 200) / 2d, 10d), Anchored(OverlayAnchor.TopCenter));
+        Assert.Equal((1920 + (1920 - 200) / 2d, 1080 - 100 - 10d), Anchored(OverlayAnchor.BottomCenter));
+
+        // Left/right middle: y centered, x pinned by the margin.
+        Assert.Equal((1930d, (1080 - 100) / 2d), Anchored(OverlayAnchor.MiddleLeft));
+        Assert.Equal((1920 + 1920 - 200 - 10, (1080 - 100) / 2d), Anchored(OverlayAnchor.MiddleRight));
+    }
+
+    [Fact]
+    public void AnchoredTopLeft_MiddleCenter_CentersBothAxes()
+        => Assert.Equal(
+            (1920 + (1920 - 200) / 2d, (1080 - 100) / 2d),
+            Anchored(OverlayAnchor.MiddleCenter));
+
+    [Fact]
+    public void AnchoredTopLeft_Custom_FallsBackToCentered()
+        // Custom has no anchored position of its own — callers route it to
+        // ToAbsoluteClamped — so this only pins that it stays on-screen.
+        => Assert.Equal(Anchored(OverlayAnchor.MiddleCenter), Anchored(OverlayAnchor.Custom));
+
+    [Fact]
+    public void AnchoredTopLeft_WindowWiderThanScreen_LeavesTheLeftEdgeVisible()
+    {
+        // A build card scaled past the monitor width: the overhang must go right, so the
+        // start of the image is still readable rather than centered half off both edges.
+        var (x, _) = OverlayPositionCalculator.AnchoredTopLeft(
+            TwoScreens[0], OverlayAnchor.TopLeft, margin: 10, winW: 3000, winH: 100);
+
+        Assert.Equal(10d, x);
+    }
 
     // ── ScreenIndexAt ───────────────────────────────────────────────────────
 

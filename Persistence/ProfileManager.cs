@@ -92,6 +92,12 @@ namespace BestInScript.API.Persistence
                         var from = Path.Combine(src, store.ProfileFileName);
                         if (File.Exists(from))
                             File.Copy(from, Path.Combine(dir, store.ProfileFileName), overwrite: true);
+
+                        // Blob subdirectories (build-card images) must travel with the copy too,
+                        // otherwise the season-rollover "copy current profile" flow silently
+                        // produces a profile whose JSON references images that aren't there.
+                        if (store.ProfileSubdirectory is { } sub)
+                            CopyDirectory(Path.Combine(src, sub), Path.Combine(dir, sub));
                     }
                 }
 
@@ -280,7 +286,35 @@ namespace BestInScript.API.Persistence
             var dir = ProfileDir(name);
             Directory.CreateDirectory(dir);
             foreach (var store in _stores)
+            {
+                if (store.ProfileSubdirectory is { } sub)
+                    Directory.CreateDirectory(Path.Combine(dir, sub));
+
                 store.Rebind(Path.Combine(dir, store.ProfileFileName));
+            }
+        }
+
+        /// <summary>Recursive directory copy. Missing source is a no-op (the store may have no blobs yet).</summary>
+        private void CopyDirectory(string from, string to)
+        {
+            if (!Directory.Exists(from)) return;
+
+            try
+            {
+                Directory.CreateDirectory(to);
+
+                foreach (var file in Directory.GetFiles(from))
+                    File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+
+                foreach (var sub in Directory.GetDirectories(from))
+                    CopyDirectory(sub, Path.Combine(to, Path.GetFileName(sub)));
+            }
+            catch (Exception ex)
+            {
+                // A failed blob copy must not abort profile creation — the profile is still
+                // usable, just missing images the user can re-add.
+                _logger.LogWarning(ex, "Could not copy '{From}' into the new profile", from);
+            }
         }
 
         private string? LoadPointerLocked()

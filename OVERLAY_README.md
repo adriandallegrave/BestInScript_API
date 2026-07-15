@@ -13,7 +13,7 @@ UI (display + placement + opacity + font size).
 - `Overlay/OverlayWindow.xaml.cs`
 - `Overlay/OverlayHostedService.cs`
 - `OverlayController.cs`
-- `wwwroot/overlay-settings-panel.html` — drop-in `<section>` for `index.html`
+- `wwwroot/_overlay-panel.html` — drop-in modal block, manually pasted into `index.html` before `</body>` (marker `BIS_OVERLAY_PANEL_MARKER`). Edit both copies. The root-level `overlay-settings-panel.html` is stale legacy from this original drop — ignore it.
 
 ### Modified
 - `BestInScript_API.csproj` — retargeted to `net10.0-windows`; enables WPF + WinForms

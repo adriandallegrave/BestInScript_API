@@ -23,6 +23,7 @@ namespace BestInScript.API.Engine
         private readonly ScriptCoordinator _coordinator;
         private readonly ProfileManager _profiles;
         private readonly OverlaySettingsStore _settings;
+        private readonly BuildCardSignal _buildCards;
         private readonly object _switchLock = new();
 
         public HotkeyEngine(
@@ -32,7 +33,8 @@ namespace BestInScript.API.Engine
             KeyboardHook hook,
             ScriptCoordinator coordinator,
             ProfileManager profiles,
-            OverlaySettingsStore settings)
+            OverlaySettingsStore settings,
+            BuildCardSignal buildCards)
         {
             _logger = logger;
             _repo = repo;
@@ -41,6 +43,7 @@ namespace BestInScript.API.Engine
             _coordinator = coordinator;
             _profiles = profiles;
             _settings = settings;
+            _buildCards = buildCards;
         }
 
         // ── IHostedService ─────────────────────────────────────────────────────
@@ -48,10 +51,10 @@ namespace BestInScript.API.Engine
         {
             LoadFromRepository();
 
-            // Arm the global emergency-stop hotkey from saved settings, and keep it in sync
-            // when the user changes it via the web UI (OverlaySettingsStore fires Changed).
-            ApplyStopAllKey(_settings.Get());
-            _settings.Changed += ApplyStopAllKey;
+            // Arm the global hotkeys from saved settings, and keep them in sync when the user
+            // changes them via the web UI (OverlaySettingsStore fires Changed).
+            ApplyGlobalHotkeys(_settings.Get());
+            _settings.Changed += ApplyGlobalHotkeys;
 
             _hook.KeyPressed += _coordinator.HandleTriggerKey;
             _hook.Start();
@@ -68,23 +71,32 @@ namespace BestInScript.API.Engine
 
             // Cancel all running scripts (owners stay — this is shutdown, not stop-all),
             // then signal the hook thread's message loop to exit.
-            _settings.Changed -= ApplyStopAllKey;
+            _settings.Changed -= ApplyGlobalHotkeys;
             _coordinator.CancelAllRunning();
             _hook.Stop();
             return Task.CompletedTask;
         }
 
         /// <summary>
-        /// Resolve the emergency-stop hotkey from settings and push it to the coordinator.
+        /// Resolve the global hotkeys from settings and push them to the coordinator.
         /// An unset/invalid key resolves to VK 0 (disabled).
         /// </summary>
-        private void ApplyStopAllKey(OverlaySettings settings)
+        private void ApplyGlobalHotkeys(OverlaySettings settings)
         {
-            var vk = InputSimulatorService.ResolveVk(settings.StopAllHotkey ?? "");
-            _coordinator.SetStopAllKey(vk);
+            var stopVk = InputSimulatorService.ResolveVk(settings.StopAllHotkey ?? "");
+            _coordinator.SetStopAllKey(stopVk);
             _logger.LogInformation(
                 "Emergency stop-all hotkey {State} (key='{Key}', VK=0x{VK:X2})",
-                vk == 0 ? "disabled" : "armed", settings.StopAllHotkey, vk);
+                stopVk == 0 ? "disabled" : "armed", settings.StopAllHotkey, stopVk);
+
+            // Disabling the panel disarms its key too, so a leftover binding can't swallow
+            // a key the user has since given back to a script.
+            var cycleKey = settings.BuildPanel.Enabled ? settings.BuildPanel.CycleHotkey ?? "" : "";
+            var cycleVk = InputSimulatorService.ResolveVk(cycleKey);
+            _coordinator.SetBuildCardKey(cycleVk);
+            _logger.LogInformation(
+                "Build panel cycle hotkey {State} (key='{Key}', VK=0x{VK:X2})",
+                cycleVk == 0 ? "disabled" : "armed", settings.BuildPanel.CycleHotkey, cycleVk);
         }
 
         public void Dispose() { /* resources freed in StopAsync / hook thread */ }
@@ -126,6 +138,11 @@ namespace BestInScript.API.Engine
                 _coordinator.ClearAll();
                 _profiles.Activate(name);   // repoints the stores + persists the pointer
                 LoadFromRepository();
+
+                // Build cards are profile-scoped, so an open panel is now showing the
+                // previous profile's card. Re-read against the new profile rather than
+                // waiting for the next cycle press.
+                _buildCards.NotifyCardsChanged();
                 _logger.LogInformation(
                     "Profile '{Name}' active. {Scripts} script(s), {Presets} preset(s) registered.",
                     _profiles.Active, _coordinator.ScriptCount, _coordinator.PresetCount);

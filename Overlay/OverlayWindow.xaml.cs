@@ -593,38 +593,15 @@ namespace BestInScript.API.Overlay
 
             double w = ActualWidth > 0 ? ActualWidth : 200;
             double h = ActualHeight > 0 ? ActualHeight : 34;
-            double m2 = s.Margin;
+
+            var rect = new OverlayPositionCalculator.ScreenRect(
+                screenLeft, screenTop, screenWidth, screenHeight);
 
             // Custom (dragged) position: offset from the target screen's top-left,
             // clamped so the pill can't be parked fully off-screen.
-            if (s.Anchor == OverlayAnchor.Custom)
-            {
-                var rect = new OverlayPositionCalculator.ScreenRect(
-                    screenLeft, screenTop, screenWidth, screenHeight);
-                var (cx, cy) = OverlayPositionCalculator.ToAbsoluteClamped(
-                    rect, s.PositionX, s.PositionY, w, h);
-                Left = cx;
-                Top = cy;
-                return;
-            }
-
-            double x = s.Anchor switch
-            {
-                OverlayAnchor.TopLeft or OverlayAnchor.MiddleLeft or OverlayAnchor.BottomLeft
-                    => screenLeft + m2,
-                OverlayAnchor.TopRight or OverlayAnchor.MiddleRight or OverlayAnchor.BottomRight
-                    => screenLeft + screenWidth - w - m2,
-                _ => screenLeft + (screenWidth - w) / 2
-            };
-
-            double y = s.Anchor switch
-            {
-                OverlayAnchor.TopLeft or OverlayAnchor.TopCenter or OverlayAnchor.TopRight
-                    => screenTop + m2,
-                OverlayAnchor.BottomLeft or OverlayAnchor.BottomCenter or OverlayAnchor.BottomRight
-                    => screenTop + screenHeight - h - m2,
-                _ => screenTop + (screenHeight - h) / 2
-            };
+            var (x, y) = s.Anchor == OverlayAnchor.Custom
+                ? OverlayPositionCalculator.ToAbsoluteClamped(rect, s.PositionX, s.PositionY, w, h)
+                : OverlayPositionCalculator.AnchoredTopLeft(rect, s.Anchor, s.Margin, w, h);
 
             Left = x;
             Top = y;

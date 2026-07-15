@@ -1,0 +1,913 @@
+<!-- BIS_BUILD_PANEL_MARKER -->
+<style>
+    /* Build-guide modal — themed off index.html CSS variables. */
+    #bis-bp-trigger {
+        background: var(--bg3);
+        color: var(--text);
+        padding: 6px 12px;
+        border: 1px solid var(--border);
+        margin-right: 8px;
+    }
+
+        #bis-bp-trigger:hover {
+            color: var(--accent);
+        }
+
+    #bis-bp-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.6);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 900;
+    }
+
+        #bis-bp-backdrop.open {
+            display: flex;
+        }
+
+    #bis-bp-dialog {
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        width: min(980px, 94vw);
+        max-height: 92vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 18px 50px rgba(0,0,0,.5);
+    }
+
+        #bis-bp-dialog header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+            #bis-bp-dialog header h2 {
+                font-size: 15px;
+                margin: 0;
+                flex: 1;
+            }
+
+        #bis-bp-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+            #bis-bp-close:hover {
+                color: var(--text);
+            }
+
+    #bis-bp-error {
+        display: none;
+        margin: 10px 16px 0;
+        padding: 8px 10px;
+        border-radius: 5px;
+        background: rgba(232,82,82,.12);
+        border: 1px solid rgba(232,82,82,.4);
+        color: #ff9b9b;
+        font-size: 12px;
+    }
+
+        #bis-bp-error.show {
+            display: block;
+        }
+
+    /* Two columns: cards on the left, panel setup on the right. Collapses on
+       narrow windows so the dialog still fits a 1080p screen. */
+    #bis-bp-body {
+        padding: 14px 16px;
+        overflow-y: auto;
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 18px;
+    }
+
+    @media (max-width: 860px) {
+        #bis-bp-body {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .bis-bp-section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--text-dim);
+        margin: 0 0 8px;
+    }
+
+    .bis-bp-hint {
+        font-size: 11px;
+        color: var(--text-dim);
+        line-height: 1.5;
+        margin: 0 0 10px;
+    }
+
+    /* Paste / drop target. */
+    #bis-bp-drop {
+        border: 1px dashed var(--border);
+        border-radius: 6px;
+        padding: 18px 12px;
+        text-align: center;
+        color: var(--text-dim);
+        font-size: 12px;
+        cursor: pointer;
+        background: var(--bg3);
+        transition: border-color .12s, color .12s;
+    }
+
+        #bis-bp-drop:hover,
+        #bis-bp-drop.hot {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        #bis-bp-drop strong {
+            color: var(--text);
+        }
+
+    #bis-bp-list {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .bis-bp-card {
+        display: grid;
+        grid-template-columns: 72px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg3);
+    }
+
+        .bis-bp-card img {
+            width: 72px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 4px;
+            background: #000;
+            cursor: zoom-in;
+        }
+
+    .bis-bp-card-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+    }
+
+        .bis-bp-card-fields input[type=text] {
+            width: 100%;
+        }
+
+    .bis-bp-card-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: var(--text-dim);
+    }
+
+        .bis-bp-card-meta input[type=number] {
+            width: 62px;
+        }
+
+    .bis-bp-card-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+        .bis-bp-card-actions button {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            border-radius: 4px;
+            width: 26px;
+            height: 22px;
+            padding: 0;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+            .bis-bp-card-actions button:hover {
+                color: var(--text);
+                border-color: var(--accent);
+            }
+
+            .bis-bp-card-actions button.danger:hover {
+                color: #ff9b9b;
+                border-color: #e85252;
+            }
+
+    #bis-bp-empty {
+        color: var(--text-dim);
+        font-size: 12px;
+        padding: 10px 2px;
+    }
+
+    /* Right column: panel setup rows, mirroring the overlay dialog's layout. */
+    #bis-bp-setup .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+        #bis-bp-setup .row > label:first-child {
+            width: 92px;
+            flex: none;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        #bis-bp-setup .row input[type=number] {
+            width: 88px;
+        }
+
+    .bis-bp-check {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        margin-bottom: 8px;
+        cursor: pointer;
+    }
+
+    #bis-bp-anchors {
+        display: grid;
+        grid-template-columns: repeat(3, 22px);
+        grid-auto-rows: 22px;
+        gap: 3px;
+    }
+
+        #bis-bp-anchors button {
+            border: 1px solid var(--border);
+            background: var(--bg3);
+            border-radius: 3px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+            #bis-bp-anchors button.active {
+                border-color: var(--accent);
+                background: var(--accent);
+            }
+
+    #bis-bp-key {
+        font-family: ui-monospace, Consolas, monospace;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 3px 9px;
+        font-size: 12px;
+        min-width: 46px;
+        text-align: center;
+    }
+
+        #bis-bp-key.off {
+            color: var(--text-dim);
+        }
+
+    #bis-bp-capture.listening {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    #bis-bp-custom-note {
+        font-size: 11px;
+        color: var(--accent);
+    }
+
+    #bis-bp-dialog footer {
+        padding: 10px 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    #bis-bp-saved {
+        font-size: 12px;
+        color: var(--ok, #3ddc84);
+        opacity: 0;
+        transition: opacity .15s;
+    }
+
+        #bis-bp-saved.show {
+            opacity: 1;
+        }
+
+        #bis-bp-saved.error {
+            color: #ff9b9b;
+        }
+
+    /* Full-size preview when a thumbnail is clicked. */
+    #bis-bp-zoom {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.85);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 950;
+        cursor: zoom-out;
+    }
+
+        #bis-bp-zoom.open {
+            display: flex;
+        }
+
+        #bis-bp-zoom img {
+            max-width: 94vw;
+            max-height: 94vh;
+        }
+</style>
+
+<div id="bis-bp-backdrop" role="dialog" aria-modal="true" aria-labelledby="bis-bp-title">
+    <div id="bis-bp-dialog">
+        <header>
+            <h2 id="bis-bp-title">Build Guide Panel</h2>
+            <button id="bis-bp-close" type="button" aria-label="Close">✕</button>
+        </header>
+
+        <div id="bis-bp-error"></div>
+
+        <div id="bis-bp-body">
+            <div id="bis-bp-cards">
+                <p class="bis-bp-section-title">Cards</p>
+                <p class="bis-bp-hint">
+                    Snip part of your build guide with <strong>Win+Shift+S</strong> (or right-click an
+                    image → Copy image), then paste it below. Cards belong to the active profile.
+                </p>
+
+                <div id="bis-bp-drop" tabindex="0">
+                    <strong>Paste an image here</strong> (Ctrl+V), drop one, or click to browse
+                </div>
+                <input type="file" id="bis-bp-file" accept="image/*" style="display:none">
+
+                <div id="bis-bp-list"></div>
+                <div id="bis-bp-empty">No cards yet.</div>
+            </div>
+
+            <div id="bis-bp-setup">
+                <p class="bis-bp-section-title">Panel</p>
+
+                <label class="bis-bp-check">
+                    <input type="checkbox" id="bis-bp-enabled">
+                    <span>Enable the build panel</span>
+                </label>
+
+                <div class="row">
+                    <label>Cycle key</label>
+                    <span id="bis-bp-key" class="off">off</span>
+                    <button id="bis-bp-capture" type="button">Set</button>
+                    <button id="bis-bp-clear" type="button" title="Disable the cycle key">✕</button>
+                </div>
+                <p class="bis-bp-hint">
+                    Press it in-game to step through your cards, then hide. The game still receives the
+                    key, so pick one you have not bound. The panic key clears the panel.
+                </p>
+
+                <div class="row">
+                    <label for="bis-bp-screen">Display</label>
+                    <select id="bis-bp-screen"></select>
+                </div>
+
+                <div class="row">
+                    <label>Placement</label>
+                    <div id="bis-bp-anchors">
+                        <button type="button" data-a="TopLeft" title="Top left"></button>
+                        <button type="button" data-a="TopCenter" title="Top center"></button>
+                        <button type="button" data-a="TopRight" title="Top right"></button>
+                        <button type="button" data-a="MiddleLeft" title="Middle left"></button>
+                        <button type="button" data-a="MiddleCenter" title="Center"></button>
+                        <button type="button" data-a="MiddleRight" title="Middle right"></button>
+                        <button type="button" data-a="BottomLeft" title="Bottom left"></button>
+                        <button type="button" data-a="BottomCenter" title="Bottom center"></button>
+                        <button type="button" data-a="BottomRight" title="Bottom right"></button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <label>Or drag</label>
+                    <div>
+                        <button type="button" id="bis-bp-drag">Reposition by dragging</button>
+                        <span id="bis-bp-custom-note" style="display:none">Custom (dragged)</span>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <label for="bis-bp-maxw">Max width</label>
+                    <input type="number" id="bis-bp-maxw" min="100" max="4000" step="20">
+                </div>
+                <div class="row">
+                    <label for="bis-bp-maxh">Max height</label>
+                    <input type="number" id="bis-bp-maxh" min="100" max="4000" step="20">
+                </div>
+                <div class="row">
+                    <label for="bis-bp-margin">Margin</label>
+                    <input type="number" id="bis-bp-margin" min="0" max="400" step="2">
+                </div>
+                <div class="row">
+                    <label for="bis-bp-opacity">Opacity</label>
+                    <input type="number" id="bis-bp-opacity" min="0.1" max="1" step="0.05">
+                </div>
+                <div class="row">
+                    <label for="bis-bp-fontsize">Font size</label>
+                    <input type="number" id="bis-bp-fontsize" min="8" max="32" step="1">
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <button id="bis-bp-save" type="button">Save panel settings</button>
+            <span id="bis-bp-saved">Saved</span>
+        </footer>
+    </div>
+</div>
+
+<div id="bis-bp-zoom"><img alt="Card preview"></div>
+
+<script>
+    (function () {
+        const $ = id => document.getElementById(id);
+        const CARDS_API = '/api/buildcards';
+        const OVERLAY_API = '/api/overlay/settings';
+
+        // 1. Inject the trigger button into the header, before the overlay button.
+        const anchorBtn = $('bis-ov-trigger') || $('btn-stop-all');
+        if (anchorBtn && !$('bis-bp-trigger')) {
+            const btn = document.createElement('button');
+            btn.id = 'bis-bp-trigger';
+            btn.type = 'button';
+            btn.textContent = '📋 Build guide';
+            anchorBtn.parentNode.insertBefore(btn, anchorBtn);
+        }
+
+        const els = {
+            trigger: $('bis-bp-trigger'),
+            backdrop: $('bis-bp-backdrop'),
+            close: $('bis-bp-close'),
+            error: $('bis-bp-error'),
+            drop: $('bis-bp-drop'),
+            file: $('bis-bp-file'),
+            list: $('bis-bp-list'),
+            empty: $('bis-bp-empty'),
+            enabled: $('bis-bp-enabled'),
+            key: $('bis-bp-key'),
+            capture: $('bis-bp-capture'),
+            clearKey: $('bis-bp-clear'),
+            screen: $('bis-bp-screen'),
+            anchors: $('bis-bp-anchors'),
+            drag: $('bis-bp-drag'),
+            customNote: $('bis-bp-custom-note'),
+            maxW: $('bis-bp-maxw'),
+            maxH: $('bis-bp-maxh'),
+            margin: $('bis-bp-margin'),
+            opacity: $('bis-bp-opacity'),
+            fontSize: $('bis-bp-fontsize'),
+            save: $('bis-bp-save'),
+            saved: $('bis-bp-saved'),
+            zoom: $('bis-bp-zoom')
+        };
+
+        // Whole OverlaySettings, kept so the PUT (a full replace) can echo back every
+        // field this dialog does not edit.
+        let settings = null;
+        let cards = [];
+        let capturing = false;
+
+        const DEFAULT_PANEL = Object.freeze({
+            enabled: true,
+            cycleHotkey: null,
+            screenIndex: -1,
+            anchor: 'MiddleCenter',
+            margin: 12,
+            positionX: 0,
+            positionY: 0,
+            maxWidth: 900,
+            maxHeight: 700,
+            opacity: 0.92,
+            fontSize: 13
+        });
+
+        function showError(msg) {
+            console.warn('[Build panel]', msg);
+            els.error.textContent = msg;
+            els.error.classList.add('show');
+        }
+
+        function clearError() {
+            els.error.textContent = '';
+            els.error.classList.remove('show');
+        }
+
+        function flash(msg, isError) {
+            els.saved.textContent = msg;
+            els.saved.classList.toggle('error', !!isError);
+            els.saved.classList.add('show');
+            setTimeout(() => els.saved.classList.remove('show'), isError ? 2600 : 1400);
+        }
+
+        // ── Panel settings ───────────────────────────────────────────────────
+
+        function paintAnchor(value) {
+            els.anchors.querySelectorAll('button').forEach(b => {
+                b.classList.toggle('active', b.dataset.a === value);
+            });
+            // 'Custom' matches no grid button; the note tells the user the position came
+            // from a drag (and that picking a grid anchor replaces it).
+            els.customNote.style.display = value === 'Custom' ? '' : 'none';
+        }
+
+        function paintKey(key) {
+            if (key) { els.key.textContent = key; els.key.classList.remove('off'); }
+            else { els.key.textContent = 'off'; els.key.classList.add('off'); }
+        }
+
+        function panel() {
+            if (!settings.buildPanel) settings.buildPanel = { ...DEFAULT_PANEL };
+            return settings.buildPanel;
+        }
+
+        function applySettings(s) {
+            settings = s;
+            const p = panel();
+            els.enabled.checked = p.enabled !== false;
+            els.screen.value = p.screenIndex != null ? p.screenIndex : -1;
+            els.maxW.value = p.maxWidth != null ? p.maxWidth : DEFAULT_PANEL.maxWidth;
+            els.maxH.value = p.maxHeight != null ? p.maxHeight : DEFAULT_PANEL.maxHeight;
+            els.margin.value = p.margin != null ? p.margin : DEFAULT_PANEL.margin;
+            els.opacity.value = p.opacity != null ? p.opacity : DEFAULT_PANEL.opacity;
+            els.fontSize.value = p.fontSize != null ? p.fontSize : DEFAULT_PANEL.fontSize;
+            paintAnchor(p.anchor || DEFAULT_PANEL.anchor);
+            paintKey(p.cycleHotkey);
+        }
+
+        async function loadSettings() {
+            const r = await fetch(OVERLAY_API);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            applySettings(await r.json());
+        }
+
+        async function loadScreens() {
+            const r = await fetch('/api/overlay/screens');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const list = await r.json();
+            els.screen.innerHTML = '';
+            const primary = document.createElement('option');
+            primary.value = -1;
+            primary.textContent = 'Primary (auto)';
+            els.screen.appendChild(primary);
+            list.forEach(s => {
+                const o = document.createElement('option');
+                o.value = s.index;
+                o.textContent =
+                    '#' + (s.index + 1) + ' ' + s.name + ' (' + s.width + '×' + s.height + ')' +
+                    (s.isPrimary ? ' — primary' : '');
+                els.screen.appendChild(o);
+            });
+        }
+
+        // PUT replaces the whole OverlaySettings, so re-GET it and change only the panel
+        // block — same approach as the panic-key control. Merging into the locally cached
+        // copy instead would let a failed load (which falls back to panel-only defaults)
+        // wipe the pill placement, the panic key and the event timers on the next save.
+        async function saveSettings(extraPanel) {
+            let fresh;
+            try {
+                const r = await fetch(OVERLAY_API);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                fresh = await r.json();
+            } catch (e) {
+                showError('Could not read the current overlay settings, so nothing was saved: ' + e.message);
+                return false;
+            }
+
+            const payload = {
+                ...fresh,
+                buildPanel: { ...DEFAULT_PANEL, ...(fresh.buildPanel || {}), ...(extraPanel || {}) }
+            };
+            try {
+                const r = await fetch(OVERLAY_API, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!r.ok) throw new Error((await r.text()) || ('HTTP ' + r.status));
+                applySettings(await r.json());
+                clearError();
+                return true;
+            } catch (e) {
+                showError('Save failed: ' + e.message);
+                return false;
+            }
+        }
+
+        els.anchors.addEventListener('click', e => {
+            const btn = e.target.closest('button[data-a]');
+            if (!btn || !settings) return;
+            panel().anchor = btn.dataset.a;
+            paintAnchor(btn.dataset.a);
+        });
+
+        els.save.addEventListener('click', async () => {
+            if (!settings) return;
+            const ok = await saveSettings({
+                enabled: els.enabled.checked,
+                screenIndex: parseInt(els.screen.value, 10),
+                anchor: panel().anchor || DEFAULT_PANEL.anchor,
+                margin: parseFloat(els.margin.value),
+                maxWidth: parseFloat(els.maxW.value),
+                maxHeight: parseFloat(els.maxH.value),
+                opacity: parseFloat(els.opacity.value),
+                fontSize: parseFloat(els.fontSize.value)
+            });
+            flash(ok ? 'Saved' : 'Save failed', !ok);
+        });
+
+        // ── Cycle key capture (mirrors the panic-key flow) ───────────────────
+
+        els.capture.addEventListener('click', () => {
+            if (capturing) return;
+            capturing = true;
+            els.capture.classList.add('listening');
+            els.capture.textContent = '⌨ Press…';
+            els.key.textContent = '…';
+
+            function reset() {
+                capturing = false;
+                els.capture.classList.remove('listening');
+                els.capture.textContent = 'Set';
+                document.removeEventListener('keydown', onKey, true);
+            }
+            async function onKey(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.code === 'Escape') { paintKey(panel().cycleHotkey); reset(); return; }
+
+                const name = mapEventKey(e);
+                reset();
+                if (!name || !TRIGGER_KEYS.includes(name)) {
+                    toast('Invalid cycle key (keyboard keys only).', 'error');
+                    paintKey(panel().cycleHotkey);
+                    return;
+                }
+                if (await saveSettings({ cycleHotkey: name }))
+                    toast(`Build panel cycle key set to ${name}.`, 'success');
+            }
+            document.addEventListener('keydown', onKey, true);
+        });
+
+        els.clearKey.addEventListener('click', async () => {
+            if (await saveSettings({ cycleHotkey: null }))
+                toast('Build panel cycle key disabled.', 'success');
+        });
+
+        els.drag.addEventListener('click', async () => {
+            try {
+                const r = await fetch('/api/overlay/build-panel/edit-mode', { method: 'POST' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                clearError();
+                flash('Drag the panel, then click ✓ to keep or ✕ to cancel');
+            } catch (e) {
+                showError('Could not start drag mode: ' + e.message +
+                    '. The overlay only runs on Windows, and you need at least one card.');
+            }
+        });
+
+        // ── Cards ────────────────────────────────────────────────────────────
+
+        function renderCards() {
+            els.list.innerHTML = '';
+            els.empty.style.display = cards.length ? 'none' : '';
+
+            cards.forEach((c, i) => {
+                const row = document.createElement('div');
+                row.className = 'bis-bp-card';
+
+                const img = document.createElement('img');
+                // Cache-bust so a replaced image doesn't keep showing the old thumbnail.
+                img.src = `${CARDS_API}/${c.id}/image?v=${Date.now()}`;
+                img.alt = c.name;
+                img.title = 'Click to preview full size';
+                img.addEventListener('click', () => openZoom(img.src, c.name));
+                img.addEventListener('error', () => { img.style.visibility = 'hidden'; });
+
+                const fields = document.createElement('div');
+                fields.className = 'bis-bp-card-fields';
+
+                const name = document.createElement('input');
+                name.type = 'text';
+                name.value = c.name;
+                name.title = 'Card name (shown above the image in the overlay)';
+                name.addEventListener('change', () => save({ name: name.value.trim() || c.name }));
+
+                const meta = document.createElement('div');
+                meta.className = 'bis-bp-card-meta';
+
+                const notes = document.createElement('input');
+                notes.type = 'text';
+                notes.placeholder = 'Notes (optional)';
+                notes.value = c.notes || '';
+                notes.style.flex = '1';
+                notes.addEventListener('change', () => save({ notes: notes.value.trim() || null }));
+
+                const scaleLbl = document.createElement('label');
+                scaleLbl.textContent = 'Scale';
+                const scale = document.createElement('input');
+                scale.type = 'number';
+                scale.min = '0.25'; scale.max = '2'; scale.step = '0.05';
+                scale.value = c.scale != null ? c.scale : 1;
+                scale.title = 'Size multiplier on top of the panel max width/height';
+                scale.addEventListener('change', () => save({ scale: parseFloat(scale.value) || 1 }));
+                scaleLbl.appendChild(scale);
+
+                meta.append(notes, scaleLbl);
+                fields.append(name, meta);
+
+                const actions = document.createElement('div');
+                actions.className = 'bis-bp-card-actions';
+
+                const up = document.createElement('button');
+                up.textContent = '↑';
+                up.title = 'Move earlier in the cycle';
+                up.disabled = i === 0;
+                up.addEventListener('click', () => move(i, -1));
+
+                const down = document.createElement('button');
+                down.textContent = '↓';
+                down.title = 'Move later in the cycle';
+                down.disabled = i === cards.length - 1;
+                down.addEventListener('click', () => move(i, +1));
+
+                const del = document.createElement('button');
+                del.textContent = '🗑';
+                del.className = 'danger';
+                del.title = 'Delete this card';
+                del.addEventListener('click', () => remove(c));
+
+                actions.append(up, down, del);
+                row.append(img, fields, actions);
+                els.list.appendChild(row);
+
+                function save(patch) {
+                    updateCard({ ...c, ...patch });
+                }
+            });
+        }
+
+        async function loadCards() {
+            const r = await fetch(CARDS_API);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            cards = await r.json();
+            renderCards();
+        }
+
+        async function updateCard(card) {
+            try {
+                const r = await fetch(`${CARDS_API}/${card.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(card)
+                });
+                if (!r.ok) throw new Error((await r.text()) || ('HTTP ' + r.status));
+                await loadCards();
+                clearError();
+            } catch (e) {
+                showError('Could not update the card: ' + e.message);
+            }
+        }
+
+        // Reorder by swapping Order values with the neighbour, then persisting both —
+        // the server sorts by Order, so this is what the cycle key will follow.
+        async function move(index, delta) {
+            const target = index + delta;
+            if (target < 0 || target >= cards.length) return;
+
+            const a = cards[index], b = cards[target];
+            await updateCard({ ...a, order: target });
+            await updateCard({ ...b, order: index });
+        }
+
+        async function remove(card) {
+            if (!confirm(`Delete the card "${card.name}"? Its image is removed too.`)) return;
+            try {
+                const r = await fetch(`${CARDS_API}/${card.id}`, { method: 'DELETE' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                await loadCards();
+                toast('Card deleted.', 'success');
+            } catch (e) {
+                showError('Could not delete the card: ' + e.message);
+            }
+        }
+
+        async function upload(blob, suggestedName) {
+            const form = new FormData();
+            form.append('file', blob, suggestedName || 'card.png');
+            form.append('name', defaultCardName());
+            try {
+                const r = await fetch(CARDS_API, { method: 'POST', body: form });
+                if (!r.ok) throw new Error((await r.text()) || ('HTTP ' + r.status));
+                await loadCards();
+                clearError();
+                toast('Card added — rename it above.', 'success');
+            } catch (e) {
+                showError('Upload failed: ' + e.message);
+            }
+        }
+
+        function defaultCardName() {
+            return 'Card ' + (cards.length + 1);
+        }
+
+        // Accept an image from a paste, a drop, or the file picker.
+        function firstImage(items) {
+            for (const it of items || []) {
+                if (it.kind === 'file' && (it.type || '').startsWith('image/')) return it.getAsFile();
+            }
+            return null;
+        }
+
+        els.drop.addEventListener('click', () => els.file.click());
+        els.file.addEventListener('change', () => {
+            if (els.file.files[0]) upload(els.file.files[0], els.file.files[0].name);
+            els.file.value = '';
+        });
+
+        ['dragenter', 'dragover'].forEach(ev =>
+            els.drop.addEventListener(ev, e => { e.preventDefault(); els.drop.classList.add('hot'); }));
+        ['dragleave', 'drop'].forEach(ev =>
+            els.drop.addEventListener(ev, () => els.drop.classList.remove('hot')));
+
+        els.drop.addEventListener('drop', e => {
+            e.preventDefault();
+            const f = e.dataTransfer.files[0];
+            if (f && f.type.startsWith('image/')) upload(f, f.name);
+            else showError('That drop had no image in it.');
+        });
+
+        // Paste anywhere while the dialog is open — the user's hands are on Ctrl+V,
+        // not on the drop zone.
+        document.addEventListener('paste', e => {
+            if (!els.backdrop.classList.contains('open')) return;
+            const f = firstImage(e.clipboardData && e.clipboardData.items);
+            if (!f) return;
+            e.preventDefault();
+            upload(f, f.name || 'pasted.png');
+        });
+
+        // ── Zoom preview ─────────────────────────────────────────────────────
+
+        function openZoom(src, alt) {
+            const img = els.zoom.querySelector('img');
+            img.src = src;
+            img.alt = alt;
+            els.zoom.classList.add('open');
+        }
+        els.zoom.addEventListener('click', () => els.zoom.classList.remove('open'));
+
+        // ── Open / close ─────────────────────────────────────────────────────
+
+        async function open() {
+            clearError();
+            let ok = true;
+
+            try { await loadScreens(); } catch (e) { console.warn('[Build panel] loadScreens failed:', e); }
+            try { await loadSettings(); }
+            catch (e) { ok = false; console.warn('[Build panel] loadSettings failed:', e); }
+            try { await loadCards(); }
+            catch (e) { ok = false; console.warn('[Build panel] loadCards failed:', e); }
+
+            if (!ok) {
+                if (!settings) applySettings({ buildPanel: { ...DEFAULT_PANEL } });
+                showError('Could not reach the API — showing defaults. Check that the build you are ' +
+                          'running has the build-cards controller registered.');
+            }
+            els.backdrop.classList.add('open');
+        }
+
+        function close() { els.backdrop.classList.remove('open'); }
+
+        els.trigger && els.trigger.addEventListener('click', open);
+        els.close.addEventListener('click', close);
+        els.backdrop.addEventListener('click', e => { if (e.target === els.backdrop) close(); });
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            if (els.zoom.classList.contains('open')) { els.zoom.classList.remove('open'); return; }
+            if (els.backdrop.classList.contains('open') && !capturing) close();
+        });
+    })();
+</script>

@@ -15,12 +15,14 @@ public class ScriptCoordinatorTests
     private readonly FakeScriptRunner _runner = new();
     private readonly FakeScreenSampler _screen = new();
     private readonly PixelCaptureService _capture;
+    private readonly BuildCardSignal _buildCards = new();
     private readonly ScriptCoordinator _coordinator;
 
     public ScriptCoordinatorTests()
     {
         _capture = new PixelCaptureService(_screen, NullLogger<PixelCaptureService>.Instance);
-        _coordinator = new ScriptCoordinator(NullLogger<ScriptCoordinator>.Instance, _runner, _capture);
+        _coordinator = new ScriptCoordinator(
+            NullLogger<ScriptCoordinator>.Instance, _runner, _capture, _buildCards);
     }
 
     private static ScriptConfig Script(string name, string trigger) => new()
@@ -41,6 +43,77 @@ public class ScriptCoordinatorTests
 
     private bool IsRunning(Guid id)
         => _coordinator.GetStatus().Single(s => s.Id == id).IsRunning;
+
+    // ── Build panel cycle key ────────────────────────────────────────────────
+
+    [Fact]
+    public void BuildCardKey_RaisesCycleSignal()
+    {
+        int cycles = 0;
+        _buildCards.CycleRequested += () => cycles++;
+        _coordinator.SetBuildCardKey(Vk("F9"));
+
+        _coordinator.HandleTriggerKey(Vk("F9"));
+
+        Assert.Equal(1, cycles);
+    }
+
+    [Fact]
+    public void BuildCardKey_Unset_DoesNothing()
+    {
+        int cycles = 0;
+        _buildCards.CycleRequested += () => cycles++;
+        // No SetBuildCardKey call: the panel is dormant until the user binds a key.
+
+        _coordinator.HandleTriggerKey(Vk("F9"));
+
+        Assert.Equal(0, cycles);
+    }
+
+    [Fact]
+    public void BuildCardKey_TakesPrecedenceOverAScriptOnTheSameKey()
+    {
+        var s = Script("s", "F9");
+        _coordinator.RegisterScript(s);
+        _coordinator.SetBuildCardKey(Vk("F9"));
+
+        int cycles = 0;
+        _buildCards.CycleRequested += () => cycles++;
+
+        _coordinator.HandleTriggerKey(Vk("F9"));
+
+        // Flipping a card must never also start a macro.
+        Assert.Equal(1, cycles);
+        Assert.False(IsRunning(s.Id));
+    }
+
+    [Fact]
+    public void StopAllKey_OutranksBuildCardKey_OnACollision()
+    {
+        _coordinator.SetStopAllKey(Vk("F9"));
+        _coordinator.SetBuildCardKey(Vk("F9"));
+
+        int cycles = 0, hides = 0;
+        _buildCards.CycleRequested += () => cycles++;
+        _buildCards.HideRequested += () => hides++;
+
+        _coordinator.HandleTriggerKey(Vk("F9"));
+
+        // Safety first: the panic key stays the panic key.
+        Assert.Equal(0, cycles);
+        Assert.Equal(1, hides);
+    }
+
+    [Fact]
+    public void StopAll_HidesTheBuildPanel()
+    {
+        int hides = 0;
+        _buildCards.HideRequested += () => hides++;
+
+        _coordinator.StopAll();
+
+        Assert.Equal(1, hides);
+    }
 
     [Fact]
     public void UserToggle_StartsScript()

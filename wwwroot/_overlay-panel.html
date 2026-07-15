@@ -712,6 +712,10 @@
             if (!current) return;
             els.saved.classList.remove('error');
             const payload = {
+                // Spread the last-loaded settings first: PUT replaces the whole object, so
+                // anything this dialog doesn't edit (stopAllHotkey, buildPanel, …) must be
+                // echoed back or saving here silently resets it to the server-side default.
+                ...current,
                 enabled: els.enabled.checked,
                 hideWhenIdle: els.hideIdle.checked,
                 screenIndex: parseInt(els.screen.value, 10),

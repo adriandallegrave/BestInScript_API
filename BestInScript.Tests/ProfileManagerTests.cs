@@ -108,6 +108,52 @@ public sealed class ProfileManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_CopyFromCurrent_AlsoCopiesBlobSubdirectories()
+    {
+        // Regression guard: copy-from-current is the season-rollover flow, and a store
+        // with a ProfileSubdirectory (build-card images) must not have its blobs dropped —
+        // that would leave the new profile's JSON pointing at images that aren't there.
+        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance);
+        var mgr = Manager(cards);
+
+        var card = new BuildCard { Id = Guid.NewGuid(), Name = "Paragon" };
+        card.ImageFileName = await cards.SaveImageAsync(card.Id, new MemoryStream([1, 2, 3]), ".png");
+        cards.Save(card);
+
+        Assert.Null(mgr.Create("S6", copyFromCurrent: true));
+
+        var copiedImage = Path.Combine(_dir, "profiles", "S6", "cards", card.ImageFileName);
+        Assert.True(File.Exists(ProfilePath("S6", "build-cards.json")));
+        Assert.True(File.Exists(copiedImage));
+        Assert.Equal([1, 2, 3], await File.ReadAllBytesAsync(copiedImage));
+    }
+
+    [Fact]
+    public void Create_CopyFromCurrent_WithNoBlobsYet_Succeeds()
+    {
+        // The card store has a subdirectory but nothing in it — copying must be a no-op,
+        // not a failure.
+        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance);
+        var mgr = Manager(cards);
+
+        Assert.Null(mgr.Create("S6", copyFromCurrent: true));
+        Assert.Contains("S6", mgr.List());
+    }
+
+    [Fact]
+    public void Activate_CreatesBlobSubdirectory_ForTheNewProfile()
+    {
+        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance);
+        var mgr = Manager(cards);
+        mgr.Create("S6", copyFromCurrent: false);
+
+        mgr.Activate("S6");
+
+        Assert.Equal(Path.Combine(_dir, "profiles", "S6", "cards"), cards.ImageDirectory);
+        Assert.True(Directory.Exists(cards.ImageDirectory));
+    }
+
+    [Fact]
     public void Create_DuplicateName_Rejected()
     {
         var (s, p) = Repos();

@@ -39,6 +39,7 @@ The **#** column numbers each item (`section.item`); **Shipped** marks released 
 | 4.1 | ✅ 1.9.0 | **Drag-to-position edit mode** | Toggle an edit mode where the overlay accepts mouse input, drag the pill, save the position. Removes coordinate guessing. Requires temporarily dropping `WS_EX_TRANSPARENT`. | M |
 | 4.2 | ✅ 1.7.0 | **Per-entry style** | Color/icon per script in the overlay — `ShowInOverlay` grows into richer per-script overlay config. | S |
 | 4.3 | | **"Time since last fire"** | Pixel-gated entries show seconds since the last cast. Debugging aid — passive information only, no timing advantage. | S |
+| 4.4 | ✅ v1.14.0 | **Build guide cards** | Show the parts of a build guide you re-check mid-session (paragon board, target gear) in a click-through panel instead of alt-tabbing. Snip → paste into the web UI; one cycle key steps through cards then hides. Profile-scoped cards + images; panel placement/hotkey global. Passive display only, no new network call. | M |
 
 ## 5. Engine & scripts (fair-play constrained)
 

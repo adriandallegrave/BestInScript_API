@@ -54,6 +54,15 @@ namespace BestInScript.API.Persistence
             settings.FontSize = Math.Clamp(settings.FontSize, 8, 32);
             settings.Margin = Math.Clamp(settings.Margin, 0, 400);
 
+            // Same reasoning for the build panel: nothing else bounds its size, and it
+            // renders a full-size image rather than a couple of text rows.
+            settings.BuildPanel ??= new BuildPanelConfig();
+            settings.BuildPanel.Opacity = Math.Clamp(settings.BuildPanel.Opacity, 0.10, 1.00);
+            settings.BuildPanel.FontSize = Math.Clamp(settings.BuildPanel.FontSize, 8, 32);
+            settings.BuildPanel.Margin = Math.Clamp(settings.BuildPanel.Margin, 0, 400);
+            settings.BuildPanel.MaxWidth = Math.Clamp(settings.BuildPanel.MaxWidth, 100, 4000);
+            settings.BuildPanel.MaxHeight = Math.Clamp(settings.BuildPanel.MaxHeight, 100, 4000);
+
             OverlaySettings snapshot;
             lock (_lock)
             {
@@ -130,7 +139,8 @@ namespace BestInScript.API.Persistence
             EventsEnabled = s.EventsEnabled,
             WorldBoss = CloneEvent(s.WorldBoss),
             Helltide = CloneEvent(s.Helltide),
-            Legion = CloneEvent(s.Legion)
+            Legion = CloneEvent(s.Legion),
+            BuildPanel = CloneBuildPanel(s.BuildPanel)
         };
 
         private static EventOverlayConfig CloneEvent(EventOverlayConfig? e)
@@ -148,6 +158,25 @@ namespace BestInScript.API.Persistence
                 WarningColor = e.WarningColor is { Length: 3 }
                     ? new[] { e.WarningColor[0], e.WarningColor[1], e.WarningColor[2] }
                     : null
+            };
+        }
+
+        private static BuildPanelConfig CloneBuildPanel(BuildPanelConfig? b)
+        {
+            b ??= new BuildPanelConfig();
+            return new BuildPanelConfig
+            {
+                Enabled = b.Enabled,
+                CycleHotkey = b.CycleHotkey,
+                ScreenIndex = b.ScreenIndex,
+                Anchor = b.Anchor,
+                Margin = b.Margin,
+                PositionX = b.PositionX,
+                PositionY = b.PositionY,
+                MaxWidth = b.MaxWidth,
+                MaxHeight = b.MaxHeight,
+                Opacity = b.Opacity,
+                FontSize = b.FontSize
             };
         }
     }
