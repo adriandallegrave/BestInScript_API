@@ -25,6 +25,7 @@ namespace BestInScript.API.Overlay
         private readonly BuildCardSignal _buildSignal;
         private readonly IBuildCardRepository _cards;
         private readonly ILogger<OverlayHostedService> _logger;
+        private readonly ILogger<BuildCardWindow> _cardLogger;
 
         private Thread? _uiThread;
         private Dispatcher? _dispatcher;
@@ -38,7 +39,8 @@ namespace BestInScript.API.Overlay
             OverlayEditModeSignal editSignal,
             BuildCardSignal buildSignal,
             IBuildCardRepository cards,
-            ILogger<OverlayHostedService> logger)
+            ILogger<OverlayHostedService> logger,
+            ILogger<BuildCardWindow> cardLogger)
         {
             _engine = engine;
             _store = store;
@@ -47,6 +49,7 @@ namespace BestInScript.API.Overlay
             _buildSignal = buildSignal;
             _cards = cards;
             _logger = logger;
+            _cardLogger = cardLogger;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -74,7 +77,7 @@ namespace BestInScript.API.Overlay
 
                     // Second window on the same STA thread/dispatcher: the build-guide
                     // panel. Starts hidden; the cycle hotkey brings it up.
-                    _buildWindow = new BuildCardWindow(_cards, _store.Get());
+                    _buildWindow = new BuildCardWindow(_cards, _store.Get(), _cardLogger);
 
                     _dispatcher = app.Dispatcher;
 

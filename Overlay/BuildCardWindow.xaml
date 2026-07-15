@@ -91,6 +91,15 @@
                    StretchDirection="DownOnly"
                    RenderOptions.BitmapScalingMode="HighQuality"/>
 
+            <!-- Shown in place of the image when a card has one but it won't decode.
+                 A silent blank here is indistinguishable from a config mistake. -->
+            <TextBlock x:Name="ErrorText"
+                       Foreground="#FF9B9B"
+                       FontFamily="Segoe UI"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       Visibility="Collapsed"/>
+
             <TextBlock x:Name="NotesText"
                        Foreground="#CCCCCC"
                        FontFamily="Segoe UI"

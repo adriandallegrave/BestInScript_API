@@ -1,10 +1,8 @@
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using BestInScript.API.Engine;
 using BestInScript.API.Models;
 using BestInScript.API.Persistence;
@@ -51,7 +49,11 @@ namespace BestInScript.API.Overlay
 
         // ── State ──────────────────────────────────────────────────────────
         private readonly IBuildCardRepository _repo;
+        private readonly ILogger<BuildCardWindow> _logger;
         private BuildPanelConfig _config;
+
+        // Why the current card has no picture, surfaced in the panel instead of a blank gap.
+        private string? _imageError;
 
         private List<BuildCard> _cards = [];
         private int _index = BuildCardCycleCalculator.Hidden;
@@ -74,10 +76,12 @@ namespace BestInScript.API.Overlay
         /// </summary>
         public event Action<int, double, double>? PositionCommitted;
 
-        public BuildCardWindow(IBuildCardRepository repo, OverlaySettings initialSettings)
+        public BuildCardWindow(
+            IBuildCardRepository repo, OverlaySettings initialSettings, ILogger<BuildCardWindow> logger)
         {
             InitializeComponent();
             _repo = repo;
+            _logger = logger;
             _config = initialSettings.BuildPanel ?? new BuildPanelConfig();
 
             // Create the HWND now rather than on first Show(). OnSourceInitialized applies
@@ -153,9 +157,10 @@ namespace BestInScript.API.Overlay
             {
                 _cards = _repo.GetAll();
             }
-            catch
+            catch (Exception ex)
             {
                 // A missing/corrupt build-cards.json must not take the overlay thread down.
+                _logger.LogError(ex, "Could not read the build cards for the active profile");
                 _cards = [];
             }
         }
@@ -178,6 +183,12 @@ namespace BestInScript.API.Overlay
             CardImage.MaxHeight = _config.MaxHeight * scale;
             CardImage.Source = card is null ? null : ResolveImage(card);
             CardImage.Visibility = CardImage.Source is null ? Visibility.Collapsed : Visibility.Visible;
+
+            // Say so when a card has a name but no picture, rather than showing a bare
+            // title and leaving the user to guess whether it's a bug or their setup.
+            var failed = card is not null && CardImage.Source is null;
+            ErrorText.Text = failed ? $"⚠ image failed to load ({_imageError ?? "unknown"})" : "";
+            ErrorText.Visibility = failed ? Visibility.Visible : Visibility.Collapsed;
 
             var notes = card?.Notes;
             NotesText.Text = notes ?? "";
@@ -202,40 +213,31 @@ namespace BestInScript.API.Overlay
             if (_imageCache.TryGetValue((card.Id, target), out var cached))
                 return cached;
 
+            _imageError = null;
+
             var path = _repo.ImagePath(card);
-            if (path is null) return null;
+            if (path is null)
+            {
+                _imageError = "no image file";
+                _logger.LogWarning(
+                    "Build card '{Name}': image file '{File}' not found in the active profile",
+                    card.Name, card.ImageFileName);
+                return null;
+            }
 
             try
             {
-                // Read the header first so we only downscale — never blow a small
-                // image up to the panel's max width.
-                int sourceWidth;
-                using (var probe = File.OpenRead(path))
-                {
-                    var decoder = BitmapDecoder.Create(
-                        probe, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-                    sourceWidth = decoder.Frames[0].PixelWidth;
-                }
-
-                var bytes = File.ReadAllBytes(path);
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                // A MemoryStream + OnLoad means no lingering file lock, so the web UI can
-                // replace the image while the panel holds it.
-                bmp.StreamSource = new MemoryStream(bytes);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-                if (sourceWidth > target) bmp.DecodePixelWidth = target;
-                bmp.EndInit();
-                bmp.Freeze();
-
-                _imageCache[(card.Id, target)] = bmp;
-                return bmp;
+                var image = BuildCardImageLoader.Load(path, target);
+                _imageCache[(card.Id, target)] = image;
+                return image;
             }
-            catch
+            catch (Exception ex)
             {
-                // Unreadable/corrupt image: show the card's name with no picture rather
-                // than crashing the overlay thread.
+                // Never take the overlay thread down over one bad file — but do NOT fail
+                // silently either: a blank panel with a working title is indistinguishable
+                // from a config mistake, and cost real debugging time once already.
+                _imageError = ex.GetType().Name;
+                _logger.LogError(ex, "Build card '{Name}': could not decode '{Path}'", card.Name, path);
                 return null;
             }
         }
