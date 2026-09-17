@@ -3,9 +3,11 @@ using System.Text.Json.Serialization;
 namespace BestInScript.API.Models
 {
     /// <summary>
-    /// Raw shape of the helltides.com <c>/api/schedule</c> response: three
-    /// forward-looking arrays of upcoming events. <c>timestamp</c> values are
-    /// unix SECONDS (UTC). Only the fields the overlay actually uses are modelled.
+    /// Raw shape of the helltides.com schedule data (the <c>/api/schedule</c> JSON,
+    /// also server-rendered into the <c>/schedule</c> page — see
+    /// <see cref="Engine.ScheduleResponseParser"/>): three forward-looking arrays of
+    /// upcoming events. <c>timestamp</c> values are unix SECONDS (UTC). Only the
+    /// fields the overlay actually uses are modelled.
     /// </summary>
     public sealed class EventSchedule
     {

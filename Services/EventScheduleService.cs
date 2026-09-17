@@ -1,5 +1,4 @@
 using System.Net.Http;
-using System.Text.Json;
 using BestInScript.API.Engine;
 using BestInScript.API.Models;
 
@@ -7,7 +6,7 @@ namespace BestInScript.API.Services
 {
     /// <summary>
     /// Fetches the Diablo 4 event schedule (world boss / helltide / legion) from a
-    /// public community API ONCE at startup and caches it in memory. The overlay
+    /// public community site ONCE at startup and caches it in memory. The overlay
     /// polls <see cref="GetSnapshot"/> to render live countdowns; all time math is
     /// delegated to <see cref="EventScheduleCalculator"/>.
     ///
@@ -19,12 +18,10 @@ namespace BestInScript.API.Services
     /// </summary>
     public sealed class EventScheduleService : IHostedService, IDisposable
     {
-        private const string DefaultUrl = "https://helltides.com/api/schedule";
-
-        private static readonly JsonSerializerOptions JsonOpts = new()
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        // The public schedule page, not /api/schedule: the JSON API is behind a
+        // Cloudflare bot challenge, the page server-renders the same data.
+        // Parsing either shape lives in ScheduleResponseParser.
+        private const string DefaultUrl = "https://helltides.com/schedule";
 
         private readonly ILogger<EventScheduleService> _logger;
         private readonly HttpClient _http;
@@ -85,15 +82,28 @@ namespace BestInScript.API.Services
             _lastFetch = DateTimeOffset.UtcNow;
             try
             {
-                var json = await _http.GetStringAsync(_url);
-                var sched = JsonSerializer.Deserialize<EventSchedule>(json, JsonOpts);
-                if (sched != null)
+                using var resp = await _http.GetAsync(_url);
+                if (!resp.IsSuccessStatusCode)
                 {
-                    _schedule = sched;
-                    _logger.LogInformation(
-                        "Event schedule loaded: {Boss} bosses, {Legion} legions, {Helltide} helltides.",
-                        sched.WorldBoss.Count, sched.Legion.Count, sched.Helltide.Count);
+                    _logger.LogWarning(
+                        "Event schedule fetch from {Url} failed: HTTP {Status}; event rows hidden.",
+                        _url, (int)resp.StatusCode);
+                    return;
                 }
+
+                var sched = ScheduleResponseParser.Parse(await resp.Content.ReadAsStringAsync());
+                if (sched == null)
+                {
+                    _logger.LogWarning(
+                        "No event schedule found in the response from {Url} (site layout changed?); event rows hidden.",
+                        _url);
+                    return;
+                }
+
+                _schedule = sched;
+                _logger.LogInformation(
+                    "Event schedule loaded: {Boss} bosses, {Legion} legions, {Helltide} helltides.",
+                    sched.WorldBoss.Count, sched.Legion.Count, sched.Helltide.Count);
             }
             catch (Exception ex)
             {
