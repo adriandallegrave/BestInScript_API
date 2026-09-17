@@ -59,11 +59,15 @@ dotnet build
 # Run the test suite (BestInScript.Tests, xUnit)
 dotnet test
 
-# Publish self-contained Windows x64 executable
-dotnet publish -c Release -r win-x64 --self-contained
+# Publish the user's real install (what the Start-menu shortcut runs): single-file,
+# ReadyToRun, framework-dependent, via Properties/PublishProfiles/FolderProfile.pubxml.
+# PublishDir is required: the CLI ignores the profile's PublishUrl (a VS-only property)
+# and would write to bin\Release\net10.0-windows\win-x64\publish\ instead.
+# The app must be closed first (the exe is locked while running).
+dotnet publish -p:PublishProfile=FolderProfile -c Release -p:PublishDir=bin\Release\net10.0-windows\publish\
 ```
 
-The **published exe** (the user's real usage — a Start-menu shortcut) has no URL config, so it serves on Kestrel's default **http://localhost:5000**. Release builds are `WinExe` (conditional `OutputType` in the csproj): no console window, the tray icon is the only shell UI; Debug keeps the console for dev logs. The root-level `launchSettings.json` (port 5238) is dead — tooling only reads `Properties/launchSettings.json`.
+The **published exe** (the user's real usage — a Start-menu shortcut to `bin\Release\net10.0-windows\publish\BestInScript_API.exe`) reads the `appsettings.json` copied beside it, so config and code changes only reach it on republish. It has no URL config, so it serves on Kestrel's default **http://localhost:5000**. Release builds are `WinExe` (conditional `OutputType` in the csproj): no console window, the tray icon is the only shell UI; Debug keeps the console for dev logs. The root-level `launchSettings.json` (port 5238) is dead — tooling only reads `Properties/launchSettings.json`.
 
 Tests are pure unit tests over the DI seams (fakes for input, delays, randomness, screen, runner) — no Win32 is touched and no app instance is started. No linter is configured.
 
