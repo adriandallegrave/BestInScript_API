@@ -11,9 +11,10 @@ namespace BestInScript.API.Persistence
     {
         private const string DefaultFileName = "presets.json";
 
-        public PresetRepository(IConfiguration config, ILogger<PresetRepository> logger)
+        public PresetRepository(
+            IConfiguration config, ILogger<PresetRepository> logger, ConfigSnapshotService snapshots)
             : base(DataFilePathResolver.Resolve(config, "BestInScript:PresetsFilePath", DefaultFileName),
-                   logger, "presets")
+                   logger, "presets", snapshots)
         {
             logger.LogInformation("Preset data file: {Path}", FilePath);
         }

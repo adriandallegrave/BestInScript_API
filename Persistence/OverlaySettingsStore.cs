@@ -23,6 +23,7 @@ namespace BestInScript.API.Persistence
 
         private readonly string _path;
         private readonly ILogger<OverlaySettingsStore> _logger;
+        private readonly ConfigSnapshotService _snapshots;
         private readonly object _lock = new();
         private OverlaySettings _current;
 
@@ -30,9 +31,11 @@ namespace BestInScript.API.Persistence
 
         public OverlaySettingsStore(
             IConfiguration config,
-            ILogger<OverlaySettingsStore> logger)
+            ILogger<OverlaySettingsStore> logger,
+            ConfigSnapshotService snapshots)
         {
             _logger = logger;
+            _snapshots = snapshots;
             _path = DataFilePathResolver.Resolve(
                 config, "BestInScript:OverlaySettingsPath", DefaultFileName);
             EnsureDirectory(_path);
@@ -40,6 +43,10 @@ namespace BestInScript.API.Persistence
 
             _current = Load();
         }
+
+        /// <summary>Fully resolved path of overlay-settings.json. Fixed for the process —
+        /// these settings are global, not profile-scoped, so there is no Rebind.</summary>
+        public string FilePath => _path;
 
         public OverlaySettings Get()
         {
@@ -71,6 +78,12 @@ namespace BestInScript.API.Persistence
                 try
                 {
                     EnsureDirectory(_path);
+
+                    // BACKLOG 3.4. This PUT is a full replace with no merge, so a web-UI save
+                    // that forgets to spread the current settings silently drops fields — the
+                    // exact bug fixed in v1.14.0. Keep the previous file so it can be undone.
+                    _snapshots.Capture(_path);
+
                     var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions
                     {
                         WriteIndented = true
@@ -81,6 +94,29 @@ namespace BestInScript.API.Persistence
                 {
                     _logger.LogError(ex, "Failed to write overlay-settings.json");
                 }
+            }
+
+            try { Changed?.Invoke(snapshot); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "OverlaySettingsStore.Changed handler threw");
+            }
+        }
+
+        /// <summary>
+        /// Re-read the file from disk, replacing the cached settings, and publish them through
+        /// <see cref="Changed"/>. Used after a snapshot restore rewrites the file underneath us.
+        /// Firing <see cref="Changed"/> is load-bearing: it is what re-arms the global hotkeys
+        /// (HotkeyEngine.ApplyGlobalHotkeys) and restyles the live overlay windows. Without it a
+        /// restored file would sit on disk with nothing reading it until the next restart.
+        /// </summary>
+        public void Reload()
+        {
+            OverlaySettings snapshot;
+            lock (_lock)
+            {
+                _current = Load();
+                snapshot = Clone(_current);
             }
 
             try { Changed?.Invoke(snapshot); }

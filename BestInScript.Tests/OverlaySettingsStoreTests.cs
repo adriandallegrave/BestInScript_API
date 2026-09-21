@@ -33,8 +33,13 @@ public sealed class OverlaySettingsStoreTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
+    /// <summary>Real snapshot service (BACKLOG 3.4) — these stores require one. Writes land
+    /// in a ".snapshots" folder inside the temp dir, cleaned up with it.</summary>
+    private ConfigSnapshotService Snaps()
+        => new(_config, NullLogger<ConfigSnapshotService>.Instance);
+
     private OverlaySettingsStore Store()
-        => new(_config, NullLogger<OverlaySettingsStore>.Instance);
+        => new(_config, NullLogger<OverlaySettingsStore>.Instance, Snaps());
 
     private static BuildPanelConfig FullyPopulatedPanel() => new()
     {
@@ -166,5 +171,44 @@ public sealed class OverlaySettingsStoreTests : IDisposable
         Assert.Equal(0, p.Margin);
         Assert.Equal(4000, p.MaxWidth);
         Assert.Equal(100, p.MaxHeight);
+    }
+
+    // ── Snapshots & reload (BACKLOG 3.4) ─────────────────────────────────────
+
+    [Fact]
+    public void Save_SnapshotsThePreviousSettings()
+    {
+        // This PUT is a full replace with no merge, so a save that forgets a field wipes
+        // it. The previous file is the only way back.
+        var store = Store();
+        store.Save(new OverlaySettings { StopAllHotkey = "F12", FontSize = 20 });
+        store.Save(new OverlaySettings { StopAllHotkey = null });
+
+        var snapshots = new ConfigSnapshotService(_config, NullLogger<ConfigSnapshotService>.Instance)
+            .List(store.FilePath);
+
+        var archived = File.ReadAllText(
+            Path.Combine(ConfigSnapshotService.SnapshotDirectory(store.FilePath), snapshots[0].Id));
+        Assert.Contains("F12", archived);
+    }
+
+    [Fact]
+    public void Reload_PicksUpAnExternallyRewrittenFile_AndPublishesIt()
+    {
+        // The restore path rewrites the file underneath the store. Without Reload the
+        // cached settings — and the live overlay + global hotkeys — would never hear about it.
+        var store = Store();
+        store.Save(new OverlaySettings { StopAllHotkey = "F12" });
+
+        OverlaySettings? published = null;
+        store.Changed += s => published = s;
+
+        File.WriteAllText(store.FilePath, """{ "StopAllHotkey": "Pause", "FontSize": 19 }""");
+        store.Reload();
+
+        Assert.Equal("Pause", store.Get().StopAllHotkey);
+        Assert.NotNull(published);
+        Assert.Equal("Pause", published.StopAllHotkey);
+        Assert.Equal(19, published.FontSize);
     }
 }

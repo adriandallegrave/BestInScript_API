@@ -29,6 +29,10 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// Rotating backup of every config file, written before each save (BACKLOG 3.4).
+// Registered ahead of the stores that take it.
+builder.Services.AddSingleton<ConfigSnapshotService>();
+
 // Repos are registered as concrete singletons and their interfaces forwarded to the
 // same instance, so ProfileManager (via IProfileScopedStore) repoints the exact stores
 // that controllers, the validator, and the engine all use.

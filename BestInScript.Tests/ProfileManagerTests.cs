@@ -32,9 +32,14 @@ public sealed class ProfileManagerTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
+    /// <summary>Real snapshot service (BACKLOG 3.4) — these stores require one. Writes land
+    /// in a ".snapshots" folder inside the temp dir, cleaned up with it.</summary>
+    private ConfigSnapshotService Snaps()
+        => new(_config, NullLogger<ConfigSnapshotService>.Instance);
+
     private (ScriptRepository scripts, PresetRepository presets) Repos()
-        => (new ScriptRepository(_config, NullLogger<ScriptRepository>.Instance),
-            new PresetRepository(_config, NullLogger<PresetRepository>.Instance));
+        => (new ScriptRepository(_config, NullLogger<ScriptRepository>.Instance, Snaps()),
+            new PresetRepository(_config, NullLogger<PresetRepository>.Instance, Snaps()));
 
     private ProfileManager Manager(params IProfileScopedStore[] stores)
         => new(_config, stores, NullLogger<ProfileManager>.Instance);
@@ -101,7 +106,7 @@ public sealed class ProfileManagerTests : IDisposable
         Assert.Null(mgr.Create("S6", copyFromCurrent: true));
 
         Assert.True(File.Exists(ProfilePath("S6", "scripts.json")));
-        var copied = new ScriptRepository(_config, NullLogger<ScriptRepository>.Instance);
+        var copied = new ScriptRepository(_config, NullLogger<ScriptRepository>.Instance, Snaps());
         copied.Rebind(ProfilePath("S6", "scripts.json"));
         Assert.Single(copied.GetAll());
         Assert.Equal("carried", copied.GetAll()[0].Name);
@@ -113,7 +118,7 @@ public sealed class ProfileManagerTests : IDisposable
         // Regression guard: copy-from-current is the season-rollover flow, and a store
         // with a ProfileSubdirectory (build-card images) must not have its blobs dropped —
         // that would leave the new profile's JSON pointing at images that aren't there.
-        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance);
+        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance, Snaps());
         var mgr = Manager(cards);
 
         var card = new BuildCard { Id = Guid.NewGuid(), Name = "Paragon" };
@@ -133,7 +138,7 @@ public sealed class ProfileManagerTests : IDisposable
     {
         // The card store has a subdirectory but nothing in it — copying must be a no-op,
         // not a failure.
-        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance);
+        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance, Snaps());
         var mgr = Manager(cards);
 
         Assert.Null(mgr.Create("S6", copyFromCurrent: true));
@@ -143,7 +148,7 @@ public sealed class ProfileManagerTests : IDisposable
     [Fact]
     public void Activate_CreatesBlobSubdirectory_ForTheNewProfile()
     {
-        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance);
+        var cards = new BuildCardRepository(_config, NullLogger<BuildCardRepository>.Instance, Snaps());
         var mgr = Manager(cards);
         mgr.Create("S6", copyFromCurrent: false);
 

@@ -13,9 +13,10 @@ namespace BestInScript.API.Persistence
     {
         private const string DefaultFileName = "scripts.json";
 
-        public ScriptRepository(IConfiguration config, ILogger<ScriptRepository> logger)
+        public ScriptRepository(
+            IConfiguration config, ILogger<ScriptRepository> logger, ConfigSnapshotService snapshots)
             : base(DataFilePathResolver.Resolve(config, "BestInScript:DataFilePath", DefaultFileName),
-                   logger, "scripts")
+                   logger, "scripts", snapshots)
         {
             logger.LogInformation("Script data file: {Path}", FilePath);
         }

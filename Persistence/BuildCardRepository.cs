@@ -21,9 +21,10 @@ namespace BestInScript.API.Persistence
 
         private readonly ILogger<BuildCardRepository> _logger;
 
-        public BuildCardRepository(IConfiguration config, ILogger<BuildCardRepository> logger)
+        public BuildCardRepository(
+            IConfiguration config, ILogger<BuildCardRepository> logger, ConfigSnapshotService snapshots)
             : base(DataFilePathResolver.Resolve(config, "BestInScript:BuildCardsFilePath", DefaultFileName),
-                   logger, "build cards")
+                   logger, "build cards", snapshots)
         {
             _logger = logger;
             logger.LogInformation("Build card data file: {Path}", FilePath);

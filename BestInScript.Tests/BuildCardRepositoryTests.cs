@@ -31,8 +31,13 @@ public sealed class BuildCardRepositoryTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
+    /// <summary>Real snapshot service (BACKLOG 3.4) — these stores require one. Writes land
+    /// in a ".snapshots" folder inside the temp dir, cleaned up with it.</summary>
+    private ConfigSnapshotService Snaps()
+        => new(_config, NullLogger<ConfigSnapshotService>.Instance);
+
     private BuildCardRepository Repo()
-        => new(_config, NullLogger<BuildCardRepository>.Instance);
+        => new(_config, NullLogger<BuildCardRepository>.Instance, Snaps());
 
     private static Stream Bytes(params byte[] b) => new MemoryStream(b);
 

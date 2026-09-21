@@ -9,13 +9,16 @@ namespace BestInScript.API.Persistence
     ///
     /// Read errors on the public <see cref="GetAll"/> are logged and yield an
     /// empty list; reads inside <see cref="Save"/>/<see cref="Delete"/> are
-    /// silent (a corrupt file is simply treated as empty and overwritten).
+    /// silent (a corrupt file is simply treated as empty and overwritten) —
+    /// which is why every write archives the previous contents through
+    /// <see cref="ConfigSnapshotService"/> first.
     /// </summary>
     public abstract class JsonListFileStore<T> where T : class
     {
         private readonly object _lock = new();
         private readonly ILogger _logger;
         private readonly string _entityLabel;
+        private readonly ConfigSnapshotService _snapshots;
 
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
@@ -23,11 +26,13 @@ namespace BestInScript.API.Persistence
             PropertyNameCaseInsensitive = true
         };
 
-        protected JsonListFileStore(string filePath, ILogger logger, string entityLabel)
+        protected JsonListFileStore(
+            string filePath, ILogger logger, string entityLabel, ConfigSnapshotService snapshots)
         {
             FilePath = filePath;
             _logger = logger;
             _entityLabel = entityLabel;
+            _snapshots = snapshots;
             EnsureDirectory(FilePath);
         }
 
@@ -128,6 +133,12 @@ namespace BestInScript.API.Persistence
         private void WriteAll(List<T> items)
         {
             EnsureDirectory(FilePath);
+
+            // BACKLOG 3.4: archive what is on disk RIGHT NOW, never the list we are about to
+            // write. If ReadSilent just turned a corrupt file into an empty list, the snapshot
+            // has to hold the corrupt original — that is the edit worth undoing.
+            _snapshots.Capture(FilePath);
+
             File.WriteAllText(FilePath, JsonSerializer.Serialize(items, JsonOpts));
         }
 

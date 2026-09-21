@@ -19,6 +19,7 @@ This tool replaces *repetitive* keystrokes, not skill. Its design deliberately f
 - **Pixel-gated autocast** — a script can watch one screen pixel (e.g. a skill icon) and only fire when it reads as "ready", using a two-color ready/cooldown comparison that is robust to lighting drift.
 - **Overlay** — a topmost, click-through pill showing which scripts/presets are active and the live pixel state (`READY` / `waiting` / `unreadable`).
 - **Web UI + REST API** — configure everything in the browser; Swagger UI available for the raw API.
+- **Config snapshots** — every config file is backed up before each write (last 10), so a bad edit or an accidental delete can be rolled back from the 🕘 **Snapshots** dialog.
 - **Tray icon** — the published app runs without a console window; a system-tray icon offers quick actions: open the web UI (also on double-click), stop all scripts, exit.
 
 ## Requirements
@@ -92,6 +93,7 @@ All under `/api/[controller]`; full schema in Swagger at `/swagger`.
 | `/api/overlay/settings`, `/api/overlay/screens` | Overlay placement + monitor list |
 | `/api/screen/color`, `/api/screen/cursor` | Pixel/cursor sampling for pixel-trigger setup |
 | `/api/profiles` (list, create, `/{name}/activate`, rename, delete) | Named config profiles (per character/build/season) |
+| `/api/snapshots`, `POST /api/snapshots/{target}/restore` | Config file history + restore |
 
 ## Configuration & data
 
@@ -102,7 +104,22 @@ Configuration lives in JSON files stored under `C:\temp` by default:
 | `profiles/<name>/scripts.json` | Script definitions (trigger key, steps, delays, pixel trigger) — per profile |
 | `profiles/<name>/presets.json` | Preset definitions (trigger key, member scripts) — per profile |
 | `profiles.json` | Which profile is active |
+| `profiles/<name>/build-cards.json` + `cards/` | Build guide cards and their images — per profile |
 | `overlay-settings.json` | Overlay placement and style — **global** (shared by all profiles) |
+| `.snapshots/` | Previous versions of each JSON file beside it (last 10) — see below |
+
+### Config snapshots
+
+Every write to a config file first copies the **previous** contents into a `.snapshots/` folder
+beside it, keeping the last 10 (`BestInScript:SnapshotCount`; `0` switches the feature off). Open
+the 🕘 **Snapshots** dialog in the header to see what is kept and restore any of it — the version
+you restore *away from* is kept too, so a restore can itself be undone. Restoring scripts or
+presets reloads the engine, so anything currently running stops.
+
+Snapshots live inside the profile they belong to, so renaming or deleting a profile takes them
+with it, and creating a profile from the current one starts with clean history. Build card
+*images* are separate files and are not snapshotted — a restored card whose image was deleted
+shows a load warning in the panel until you re-paste the picture.
 
 ### Profiles
 
@@ -132,6 +149,7 @@ Every new feature ships with a description, a one-line commit message, a new row
 
 | Version | Date | Commit | Description |
 |---------|------------|---------|-------------|
+| 1.15.0 | 2026-09-21 | PENDING | **Config snapshots**: every config file is now backed up before each write, so a bad edit or an accidental delete is no longer permanent. Saving or deleting a script, preset or build card — and saving the overlay settings — first copies the file's **previous** contents into a `.snapshots/` folder beside it, keeping the last 10 (`BestInScript:SnapshotCount`; `0` disables). The new 🕘 **Snapshots** dialog in the header lists what is kept per file with timestamps and sizes, and restores any of it in one click; the version you restore away from is kept too, so a restore can itself be undone. Restoring scripts or presets reloads the engine (anything running stops), build cards refresh the panel, and overlay settings re-apply live — no restart. This also closes a real data-loss hole: the store treats a file it cannot parse as an empty list and overwrites it, so one hand-edited or truncated `scripts.json` used to silently cost every script. Snapshots are profile-scoped (they move with a rename, die with a delete, and are not carried into a copied profile); card **images** are side files and are not snapshotted, so a restored card whose image was deleted shows the panel's load warning until re-pasted. Additive and passive — no data-file format change (existing files load unchanged), no timing or synthetic-input change, no new network call. Unit-tested (30 cases: pre-write capture, retention/pruning, same-millisecond ordering, dedup, restore round-trip, path-traversal rejection, corrupt-file recovery, and the overlay store's new reload) |
 | 1.14.2 | 2026-09-16 | 4c63186 | **Event timers vanished from the overlay**: world boss / helltide / legion clocks stopped showing at all. helltides.com put its `/api/schedule` JSON API behind a Cloudflare bot challenge, so the app's startup fetch got `403 Forbidden` for any non-browser client, and a failed fetch just hides the rows (logged only to a console the published exe doesn't have). The source is now the public `helltides.com/schedule` page, which server-renders the exact same schedule into a Nuxt payload; the new pure `ScheduleResponseParser` decodes that payload (and still accepts plain API JSON for a `ScheduleApiUrl` override). Still one GET per launch, still the app's only network call. Fetch failures now log the HTTP status or "no schedule found" instead of a generic exception. Unit-tested (11 cases: page payload, API JSON, challenge page, payload without a schedule, malformed/cyclic input). The published exe reads its own `appsettings.json`, so republish (or change `ScheduleApiUrl` there) to pick this up |
 | 1.14.1 | 2026-07-15 | 47f89d0 | **Build panel images never rendered** (1.14.0 bug): the panel showed a card's name in the right place with no picture, for every card regardless of size. The decode set `BitmapCreateOptions.IgnoreImageCache` alongside a `StreamSource` — WPF's image cache is URI-keyed and a stream has no URI, so `EndInit()` threw `ArgumentNullException("key")`, which a silent `catch` turned into a blank panel. Dropped the flag (a stream source bypasses the URI cache anyway) and set `CacheOption` before `StreamSource` as WPF requires. The decode moved to `BuildCardImageLoader` — window-free and therefore unit-tested (9 cases: frozen result, downscale-only, no file lock, corrupt/missing files). A card that still can't load now shows `⚠ image failed to load (…)` in the panel and logs the exception instead of failing silently |
 | 1.14.0 | 2026-07-15 | ff6dee5 | **Build guide cards**: keep the parts of a build guide you actually re-check (paragon board, target gear) on screen instead of alt-tabbing to a browser. Snip a region with **Win+Shift+S** (or right-click → Copy image), paste it into the new **📋 Build guide** panel, and one configurable **cycle key** steps through your cards in-game — press → card 1, press → card 2, … → hidden. Cards render in their own click-through, topmost window with independent placement (9-point anchor or drag-to-position), max size, per-card scale, and optional notes. The **panic key clears the panel** along with everything else. Cards are **profile-scoped** (`profiles/<name>/build-cards.json` + `profiles/<name>/cards/*.png`) so each character/build keeps its own, and copy-current carries them at season rollover. Passive display only — a picture pinned over the screen: no game reads, no synthetic input, and **no new network call** (the schedule fetch remains the app's only outbound request). Additive `OverlaySettings.BuildPanel`; existing `overlay-settings.json` loads unchanged with the panel dormant until you bind a key. Also fixes a pre-existing bug where saving the overlay-settings dialog silently reset the panic key to its default |

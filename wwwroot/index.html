@@ -2501,7 +2501,8 @@
 
         async function deleteScript() {
             if (!selected || isNew) return;
-            if (!confirm(`Delete "${selected.name}"? This cannot be undone.`)) return;
+            if (!confirm(`Delete "${selected.name}"?\n\n` +
+                `You can restore scripts.json from before this delete via 🕘 Snapshots.`)) return;
             try {
                 const r = await fetch(`${API}/scripts/${selected.id}`, { method: 'DELETE' });
                 if (!r.ok) { toast('Delete failed', 'error'); return; }
@@ -2556,7 +2557,8 @@
 
         async function deletePreset() {
             if (!selected || isNew) return;
-            if (!confirm(`Delete preset "${selected.name}"? This cannot be undone.`)) return;
+            if (!confirm(`Delete preset "${selected.name}"?\n\n` +
+                `You can restore presets.json from before this delete via 🕘 Snapshots.`)) return;
             try {
                 const r = await fetch(`${API}/presets/${selected.id}`, { method: 'DELETE' });
                 if (!r.ok) { toast('Delete failed', 'error'); return; }
@@ -4349,6 +4351,442 @@
         });
     })();
 </script>
+
+    <!-- BIS_SNAPSHOT_PANEL_MARKER -->
+    <!-- Config snapshots (BACKLOG 3.4). Unlike the overlay and build-guide blocks above,
+         this one is kept in index.html ONLY — there is no wwwroot/_snapshot-panel.html twin
+         to edit in parallel. BACKLOG 6.4 tracks paying off that paste debt; this panel
+         deliberately doesn't add to it. -->
+    <style>
+        /* Config-snapshots modal — themed off index.html CSS variables. */
+        #bis-sn-trigger {
+            background: var(--bg3);
+            color: var(--text);
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            margin-right: 8px;
+        }
+
+            #bis-sn-trigger:hover {
+                color: var(--accent);
+            }
+
+        #bis-sn-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+            #bis-sn-backdrop.open {
+                display: flex;
+            }
+
+        #bis-sn-dialog {
+            width: 620px;
+            max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: var(--font);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+            overflow: hidden;
+        }
+
+            #bis-sn-dialog header {
+                display: flex;
+                align-items: center;
+                padding: 14px 18px;
+                border-bottom: 1px solid var(--border);
+                background: var(--bg1);
+                flex: 0 0 auto;
+            }
+
+                #bis-sn-dialog header h2 {
+                    font-size: 13px;
+                    font-weight: 700;
+                    letter-spacing: .08em;
+                    text-transform: uppercase;
+                    color: var(--accent);
+                    flex: 1;
+                    margin: 0;
+                }
+
+            #bis-sn-dialog footer {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 18px;
+                border-top: 1px solid var(--border);
+                background: var(--bg1);
+                flex: 0 0 auto;
+            }
+
+        #bis-sn-close {
+            background: transparent;
+            color: var(--muted);
+            font-size: 18px;
+            line-height: 1;
+            padding: 2px 8px;
+            border: none;
+        }
+
+            #bis-sn-close:hover {
+                color: var(--text);
+            }
+
+        #bis-sn-error {
+            display: none;
+            margin: 0 18px 12px;
+            padding: 8px 10px;
+            background: rgba(232, 82, 82, .12);
+            border: 1px solid rgba(232, 82, 82, .4);
+            border-radius: var(--radius);
+            color: var(--red);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+            #bis-sn-error.show {
+                display: block;
+            }
+
+        #bis-sn-body {
+            padding: 16px 18px;
+            overflow-y: auto;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        .bis-sn-hint {
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.6;
+            margin: 0 0 16px;
+        }
+
+        #bis-sn-keep {
+            font-size: 11px;
+            color: var(--muted);
+            flex: 1;
+        }
+
+        #bis-sn-refresh {
+            background: var(--bg3);
+            color: var(--muted);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+        }
+
+            #bis-sn-refresh:hover {
+                color: var(--accent);
+            }
+
+        .bis-sn-group {
+            margin-bottom: 18px;
+        }
+
+        .bis-sn-group-head {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin: 0 0 8px;
+        }
+
+        .bis-sn-group-title {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .bis-sn-file {
+            font-size: 11px;
+            color: var(--muted);
+            opacity: .7;
+        }
+
+        .bis-sn-note {
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.5;
+            margin: 0 0 8px;
+        }
+
+        .bis-sn-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .bis-sn-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 10px;
+            align-items: center;
+            padding: 7px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg3);
+        }
+
+        .bis-sn-when {
+            font-size: 12px;
+        }
+
+        .bis-sn-size {
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .bis-sn-row button {
+            background: var(--bg2);
+            color: var(--muted);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            font-size: 12px;
+        }
+
+            .bis-sn-row button:hover {
+                color: var(--accent);
+            }
+
+        .bis-sn-empty {
+            font-size: 11px;
+            color: var(--muted);
+            padding: 8px 10px;
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+        }
+    </style>
+
+    <div id="bis-sn-backdrop" role="dialog" aria-modal="true" aria-labelledby="bis-sn-title">
+        <div id="bis-sn-dialog">
+            <header>
+                <h2 id="bis-sn-title">Config Snapshots</h2>
+                <button id="bis-sn-close" type="button" aria-label="Close">✕</button>
+            </header>
+
+            <div id="bis-sn-error"></div>
+
+            <div id="bis-sn-body">
+                <p class="bis-sn-hint">
+                    A copy of each config file is kept every time it changes, so a bad edit can be
+                    walked back. Restoring overwrites the live file — and keeps a copy of what it
+                    replaced, so the restore itself can be undone. Restoring scripts or presets
+                    reloads the engine, so anything currently running stops.
+                </p>
+                <div id="bis-sn-list"></div>
+            </div>
+
+            <footer>
+                <span id="bis-sn-keep"></span>
+                <button id="bis-sn-refresh" type="button">Refresh</button>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const SNAPSHOTS_API = '/api/snapshots';
+            const $ = id => document.getElementById(id);
+
+            // Card images live beside build-cards.json as separate files and are not
+            // snapshotted, so say so rather than letting a restore look broken.
+            const NOTES = {
+                'build-cards':
+                    'Card images are not snapshotted. A restored card whose image was deleted shows ' +
+                    '"⚠ image failed to load" in the panel until you re-paste the picture.'
+            };
+
+            // Restoring these two rewrites what the engine is running from, so the whole
+            // main UI has to be re-read afterwards.
+            const ENGINE_TARGETS = ['scripts', 'presets'];
+
+            const els = {};
+            let data = null;
+
+            function showError(msg) {
+                els.error.textContent = msg;
+                els.error.classList.add('show');
+            }
+
+            function clearError() {
+                els.error.textContent = '';
+                els.error.classList.remove('show');
+            }
+
+            function fmtWhen(iso) {
+                const d = new Date(iso);
+                return isNaN(d) ? iso : d.toLocaleString();
+            }
+
+            function fmtSize(bytes) {
+                if (bytes < 1024) return bytes + ' B';
+                return (bytes / 1024).toFixed(1) + ' KB';
+            }
+
+            async function load() {
+                const r = await fetch(SNAPSHOTS_API);
+                if (!r.ok) throw new Error(await r.text());
+                data = await r.json();
+            }
+
+            function render() {
+                els.list.innerHTML = '';
+                els.keep.textContent = !data ? ''
+                    : data.keep === 0
+                        ? 'Snapshots are switched off (BestInScript:SnapshotCount = 0).'
+                        : `Keeping the last ${data.keep} copies of each file.`;
+
+                (data ? data.targets : []).forEach(t => {
+                    const group = document.createElement('div');
+                    group.className = 'bis-sn-group';
+
+                    const head = document.createElement('div');
+                    head.className = 'bis-sn-group-head';
+                    const title = document.createElement('span');
+                    title.className = 'bis-sn-group-title';
+                    title.textContent = t.label;
+                    const file = document.createElement('span');
+                    file.className = 'bis-sn-file';
+                    file.textContent = t.file;
+                    head.appendChild(title);
+                    head.appendChild(file);
+                    group.appendChild(head);
+
+                    if (NOTES[t.target]) {
+                        const note = document.createElement('p');
+                        note.className = 'bis-sn-note';
+                        note.textContent = NOTES[t.target];
+                        group.appendChild(note);
+                    }
+
+                    if (!t.snapshots.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'bis-sn-empty';
+                        empty.textContent =
+                            'No snapshots yet — one is kept the next time this file changes.';
+                        group.appendChild(empty);
+                    } else {
+                        const rows = document.createElement('div');
+                        rows.className = 'bis-sn-rows';
+
+                        t.snapshots.forEach(s => {
+                            const row = document.createElement('div');
+                            row.className = 'bis-sn-row';
+
+                            const when = document.createElement('span');
+                            when.className = 'bis-sn-when';
+                            when.textContent = fmtWhen(s.takenAtUtc);
+
+                            const size = document.createElement('span');
+                            size.className = 'bis-sn-size';
+                            size.textContent = fmtSize(s.sizeBytes);
+
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.textContent = 'Restore';
+                            btn.addEventListener('click', () => restore(t, s));
+
+                            row.appendChild(when);
+                            row.appendChild(size);
+                            row.appendChild(btn);
+                            rows.appendChild(row);
+                        });
+
+                        group.appendChild(rows);
+                    }
+
+                    els.list.appendChild(group);
+                });
+            }
+
+            async function restore(target, snapshot) {
+                const stops = ENGINE_TARGETS.includes(target.target)
+                    ? '\n\nAnything currently running will stop.'
+                    : '';
+                if (!confirm(
+                    `Restore ${target.label.toLowerCase()} from ${fmtWhen(snapshot.takenAtUtc)}?\n\n` +
+                    `${target.file} will be overwritten. A copy of the current version is kept, ` +
+                    `so you can undo this too.${stops}`))
+                    return;
+
+                try {
+                    const r = await fetch(
+                        `${SNAPSHOTS_API}/${encodeURIComponent(target.target)}/restore`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: snapshot.id })
+                        });
+                    if (!r.ok) { toast(await r.text(), 'error'); return; }
+
+                    data = await r.json();
+                    render();
+
+                    // The server just swapped the file the engine reads from, so re-read
+                    // everything rather than trusting the lists we already rendered.
+                    if (ENGINE_TARGETS.includes(target.target)) {
+                        await loadScripts();
+                        await loadPresets();
+                        renderSidebar();
+                        showNoScript();
+                    }
+
+                    toast(`${target.label} restored from ${fmtWhen(snapshot.takenAtUtc)}`);
+                } catch (e) { toast('Restore failed: ' + e.message, 'error'); }
+            }
+
+            // 1. Inject the trigger button into the header, before the build-guide button.
+            const anchorBtn = $('bis-bp-trigger') || $('bis-ov-trigger') || $('btn-stop-all');
+            if (anchorBtn && !$('bis-sn-trigger')) {
+                const btn = document.createElement('button');
+                btn.id = 'bis-sn-trigger';
+                btn.type = 'button';
+                btn.textContent = '🕘 Snapshots';
+                btn.title = 'Restore a config file from before a bad edit';
+                anchorBtn.parentNode.insertBefore(btn, anchorBtn);
+            }
+
+            // 2. Wire the dialog.
+            ['trigger', 'backdrop', 'close', 'error', 'list', 'keep', 'refresh']
+                .forEach(k => els[k] = $('bis-sn-' + k));
+
+            async function open() {
+                // Open regardless of the fetch outcome — the user clicked, something has to
+                // happen. A failure is reported in the inline banner.
+                clearError();
+                try { await load(); }
+                catch (e) {
+                    data = null;
+                    console.warn('[Snapshots] load failed:', e);
+                    showError('Could not reach /api/snapshots — ' + e.message);
+                }
+                render();
+                els.backdrop.classList.add('open');
+            }
+
+            function close() { els.backdrop.classList.remove('open'); }
+
+            els.trigger && els.trigger.addEventListener('click', open);
+            els.close.addEventListener('click', close);
+            els.refresh.addEventListener('click', open);
+            els.backdrop.addEventListener('click', e => {
+                if (e.target === els.backdrop) close();
+            });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && els.backdrop.classList.contains('open')) close();
+            });
+        })();
+    </script>
 
 </body>
 </html>

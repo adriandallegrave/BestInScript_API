@@ -149,6 +149,25 @@ namespace BestInScript.API.Engine
             }
         }
 
+        /// <summary>
+        /// Drop every registration and re-load scripts/presets from the active profile's
+        /// files. Used after a snapshot restore rewrites them underneath us. Running scripts
+        /// stop and presets come back inactive — the same reset a profile switch performs,
+        /// and the right behaviour when the config they were running from just changed.
+        /// </summary>
+        public void ReloadFromDisk()
+        {
+            lock (_switchLock)
+            {
+                _coordinator.ClearAll();
+                LoadFromRepository();
+                _buildCards.NotifyCardsChanged();
+                _logger.LogInformation(
+                    "Reloaded from disk. {Scripts} script(s), {Presets} preset(s) registered.",
+                    _coordinator.ScriptCount, _coordinator.PresetCount);
+            }
+        }
+
         private void LoadFromRepository()
         {
             // Order matters: load scripts first so presets can find their members.

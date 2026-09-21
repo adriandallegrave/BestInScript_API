@@ -29,8 +29,8 @@ The **#** column numbers each item (`section.item`); **Shipped** marks released 
 |---|---------|---------|-------------|--------|
 | 3.1 | ✅ 1.3.0 | **Profiles** | Named config sets (per character/build/season) switchable in the UI. Each is a `profiles/<name>/` folder of `scripts.json` + `presets.json`; existing files auto-migrate into a `Default` profile. Overlay settings stay global. | M |
 | 3.2 | | **Import/export** | Download/upload scripts + presets as a single JSON bundle. Backup before season reset; move between machines. | S |
-| 3.3 | | **Default data dir → `%APPDATA%`** | `C:\temp` is risky (disk cleanup wipes it). Migrate the default, keep the config override. Breaking for existing setups → major bump or auto-migration. | S |
-| 3.4 | | **Config snapshots** | Auto-backup the JSON files on every write (keep last N) so a bad edit can be undone. Cheap to add in `JsonListFileStore`. | S |
+| 3.3 | | **Default data dir → `%APPDATA%`** | `C:\temp` is risky (disk cleanup wipes it). Migrate the default, keep the config override. Now also protects the 3.4 config snapshots, which live beside the data. Breaking for existing setups → major bump or auto-migration. | S |
+| 3.4 | ✅ v1.15.0 | **Config snapshots** | Auto-backup the JSON files on every write (keep last N) so a bad edit can be undone. `ConfigSnapshotService` archives the pre-write bytes into a `.snapshots/` folder beside each file (last 10, `BestInScript:SnapshotCount`); restore from the web UI's 🕘 **Snapshots** dialog. Covers `scripts.json`, `presets.json`, `build-cards.json` and `overlay-settings.json`; card images are not snapshotted. | S |
 
 ## 4. Overlay
 
